@@ -16,7 +16,7 @@ from contextlib import suppress
 from functools import wraps
 def enforce_types(callable):
     spec = inspect.getfullargspec(callable)
-    
+
     def check_types(*args, **kwargs):
         parameters = dict(zip(spec.args, args))
         parameters.update(kwargs)
@@ -26,7 +26,7 @@ def enforce_types(callable):
                 if isinstance(type_hint, typing._SpecialForm):
                     # No check for typing.Any, typing.Union, typing.ClassVar (without parameters)
                     continue
-    
+
                 try:
                     actual_type = type_hint.__origin__
                 except AttributeError:
@@ -34,7 +34,7 @@ def enforce_types(callable):
                     actual_type = type_hint
                 # In Python 3.8 one would replace the try/except with
                 # actual_type = typing.get_origin(type_hint) or type_hint
-    
+
                 if isinstance(actual_type, typing._SpecialForm):
                     # case of typing.Union[…] or typing.ClassVar[…]
                     actual_type = type_hint.__args__
@@ -42,21 +42,19 @@ def enforce_types(callable):
                     actual_type = tuple(actual_type)
                 if not isinstance(value, actual_type):
                     raise TypeError('Unexpected type for \'{}\' (expected {} but found {})'.format(name, type_hint, type(value)))
-    
+
     def decorate(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             check_types(*args, **kwargs)
             return func(*args, **kwargs)
         return wrapper
-    
+
     if inspect.isclass(callable):
         callable.__init__ = decorate(callable.__init__)
         return callable
-    
+
     return decorate(callable)
-
-
 
 class ChanException(Exception):
     pass
@@ -94,7 +92,6 @@ class Direction(Enum):
 
     Unknow = "未知"
 
-
 @enforce_types
 class Signal(object):
     def __init__(self, name: str, level: int):
@@ -130,7 +127,7 @@ class RawCandle(object):
         self.diff = None
         self.dea = None
         self.macd = None
-        
+
         self.K = 50
         self.D = 50
         self.J = 50
@@ -142,7 +139,7 @@ class RawCandle(object):
         return cls(symbol, datetime.fromtimestamp(timestamp), open, high, low, close, vol)
     def __bytes__(self):
         return struct.pack(">6d", int(self.dt.timestamp()), round(self.open, 8), round(self.high, 8), round(self.low, 8), round(self.close, 8), round(self.vol, 8))
-        
+
     def __str__(self):
         return f'RawCandle("{self.symbol}", {self.dt}, {self.open}, {self.high}, {self.low}, {self.close}, {self.vol}, {self.style})'
     def __repr__(self):
@@ -172,7 +169,6 @@ def binCandle(arr:List[RawCandle], freq:Freq):
     vol = sum([k.vol for k in arr])
     return RawCandle(symbol, dt, open, high, low, close, vol, freq)
 
-
 @enforce_types
 class ChanCandle:
     """缠论k线"""
@@ -185,26 +181,26 @@ class ChanCandle:
         self.style = None
         self.index = 0
         self.info = ""
-    
+
     def __getitem__(self, i):
         return self.elements[i]
     def __str__(self):
         return f'ChanCandle("{self.symbol}", {self.dt}, {self.start}, {self.end}, {self.style}, {self.direction}, size={len(self.elements)})'
     def __repr__(self):
         return f'ChanCandle("{self.symbol}", {self.dt}, {self.start}, {self.end}, {self.style}, {self.direction}, size={len(self.elements)})'
-    
+
     @property
     def dt(self) -> datetime:
         if not self.elements:
             return datetime.now()
         return self.elements[-1].dt
-    
+
     @property
     def vol(self) -> [int, float]:
         if not self.elements:
             return 0
         return sum([i.vol for i in self.elements])
-    
+
     @property
     def realdt(self) -> datetime:
         if not self.elements:
@@ -216,7 +212,7 @@ class ChanCandle:
         else:
             return None
             raise ChanException
-    
+
     @property
     def macd(self) -> [float, int]:
         if not self.elements:
@@ -241,7 +237,6 @@ class ChanCandle:
                          "high":self.high, "low":self.low, "close":self.end,
                          "vol":self.vol, "style":self.style, "index":self.index, "dir":self.direction, "elements":self.elements}
 
-
 @enforce_types
 class ChanFenXing: # 分型
     __slots__ = ["style", "fx", "elements"]
@@ -255,14 +250,14 @@ class ChanFenXing: # 分型
         self.fx = None
         if self.style is Shape.G:
             self.fx = self.high
-    
+
         if self.style is Shape.D:
             self.fx = self.low
-        
+
     def __eq__(self, other):
         return (isinstance(other, type(self))) and \
                ((self.l, self.m, self.r) == (other.l, other.m, other.r))
-    
+
     def __str__(self):
         return f'ChanFenXing("{self.style}", {self.dt}, {self.fx})'
 
@@ -279,7 +274,7 @@ class ChanFenXing: # 分型
     def power(self) -> str:
         if self.style is Shape.G:
             return "强" if self.r.low < self.l.low else "弱"
-    
+
         if self.style is Shape.D:
             return "强" if self.r.high > self.l.high else "弱"
 
@@ -289,7 +284,7 @@ class ChanFenXing: # 分型
     @property
     def high(self) -> [float, int]:
         return self.m.high
-        
+
     @property
     def l(self) -> ChanCandle:
         return self.elements[0]
@@ -300,7 +295,6 @@ class ChanFenXing: # 分型
     def r(self) -> ChanCandle:
         return self.elements[2]
 
-
 @enforce_types
 class ChanFeature:
     __slots__ = ["__level", "__symbol", "__start", "__end", "elements", "index", "isFixed", "isVisual"]
@@ -310,35 +304,35 @@ class ChanFeature:
 
         if not (start.dt < end.dt):
             raise ValueError("时序错误")
-        
+
         if (start.style == Shape.D) and (end.style == Shape.G):
             if start.low > end.high:
                 raise ValueError("DG 结构错误: 上涨特征序列 起点比终点高", level, start.dt, end.dt)
         elif (start.style == Shape.G) and (end.style == Shape.D):
             if start.high < end.low:
                 raise ValueError("GD 结构错误: 下跌特征序列 起点比终点低", level, start.dt, end.dt)
-        
+
         elif (start.style == Shape.D) and (end.style == Shape.S):
             if start.low > end.r.high:
                 raise ValueError("DS 结构错误: 上涨特征序列 起点比终点高", level, start.dt, end.dt)
         elif (start.style == Shape.G) and (end.style == Shape.X):
             if start.high < end.r.low:
                 raise ValueError("GX 结构错误: 下跌特征序列 起点比终点低", level, start.dt, end.dt)
-        
+
         elif (start.style == Shape.S) and (end.style == Shape.S):
             if start.l.low > end.r.high:
                 raise ValueError("SS 结构错误: 上涨特征序列 起点比终点高", level, start.dt, end.dt)
         elif (start.style == Shape.X) and (end.style == Shape.X):
             if start.l.high < end.r.low:
                 raise ValueError("XX 结构错误: 下跌特征序列 起点比终点低", level, start.dt, end.dt)
-        
+
         elif (start.style == Shape.S) and (end.style == Shape.G):
             if start.l.low > end.high:
                 raise ValueError("SG 结构错误: 上涨特征序列 起点比终点高", level, start.dt, end.dt)
         elif (start.style == Shape.X) and (end.style == Shape.D):
             if start.l.high < end.low:
                 raise ValueError("XD 结构错误: 下跌特征序列 起点比终点低", level, start.dt, end.dt)
-        
+
         else:
             raise TypeError(doubleRelation(start, end), start.style, end.style)
 
@@ -348,16 +342,16 @@ class ChanFeature:
         self.elements = elements
         self.index = index
         self.isFixed = isFixed
-        
+
         self.isVisual = isVisual # 虚段标志
 
         if not self.elements:
             return
-        
+
         if type(self.elements[0]) is ChanCandle:
             if len(self.elements) < 5 and isFixed == 1:
                 print("ChanFeature 警告: 笔结构不完整。", len(self.elements), self.isFixed)
-            
+
             if self.__start.m != self.elements[0]:raise ValueError(5)
             if self.__end.m != self.elements[-1]:
                 print(self.__end.m, self.elements[-1])
@@ -365,10 +359,9 @@ class ChanFeature:
         else:
             if len(self.elements) < 3:
                 print("ChanFeature 警告: 线段结构不完整。", len(self.elements), self.isFixed)
-            
+
             if self.__start != self.elements[0].start:raise ValueError(5)
             if self.__end != self.elements[-1].end:raise ValueError(6)
-        
 
     @property
     def LEVEL(self) -> int:
@@ -379,7 +372,7 @@ class ChanFeature:
     @property
     def macd(self)  -> float:
         return sum([abs(o.macd) for o in self.elements])
-    
+
     @property
     def cklines(self) -> List[ChanCandle]:
         result = []
@@ -389,11 +382,11 @@ class ChanFeature:
             for tz in self.elements:
                 result.extend(tz.cklines)
         return result
-        
+
     @property
     def RSQ(self) -> float:
         """拟合优度 R SQuare
-    
+
         :param close: 收盘价序列
         :return:
         """
@@ -411,12 +404,12 @@ class ChanFeature:
             return 0
         y_intercept = (1 / delta) * (x_squred_sum * y_sum - x_sum * xy_product_sum)
         slope = (1 / delta) * (num * xy_product_sum - x_sum * y_sum)
-    
+
         y_mean = np.mean(y)
         ss_tot = sum([(y1 - y_mean) * (y1 - y_mean) for y1 in y]) + 0.00001
         ss_err = sum([(y[i] - slope * x[i] - y_intercept) * (y[i] - slope * x[i] - y_intercept) for i in range(len(x))])
         rsq = 1 - ss_err / ss_tot
-    
+
         #return rsq
         return round(rsq, 8)
 
@@ -438,7 +431,7 @@ class ChanFeature:
                 raise ValueError("GD 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             return self.start
             #return self.end
-        
+
         elif (start.style == Shape.D) and (end.style == Shape.S):
             if start.low > end.r.high:
                 raise ValueError("DS 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
@@ -449,7 +442,7 @@ class ChanFeature:
                 raise ValueError("GX 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             return self.start
             #return self.end
-        
+
         elif (start.style == Shape.S) and (end.style == Shape.S):
             if start.l.low > end.r.high:
                 raise ValueError("SS 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
@@ -460,7 +453,7 @@ class ChanFeature:
                 raise ValueError("XX 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             return self.start
             #return self.end
-        
+
         elif (start.style == Shape.S) and (end.style == Shape.G):
             if start.l.low > end.high:
                 raise ValueError("SG 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
@@ -471,10 +464,10 @@ class ChanFeature:
                 raise ValueError("XD 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             return self.start
             #return self.end
-        
+
         else:
             raise TypeError(doubleRelation(start, end), start.style, end.style)
-    
+
     @property
     def HIGH(self) -> int:
         if self.high.style is Shape.S:
@@ -495,7 +488,7 @@ class ChanFeature:
                 raise ValueError("GD 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             #return self.start
             return self.end
-        
+
         elif (start.style == Shape.D) and (end.style == Shape.S):
             if start.low > end.r.high:
                 raise ValueError("DS 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
@@ -506,7 +499,7 @@ class ChanFeature:
                 raise ValueError("GX 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             #return self.start
             return self.end
-        
+
         elif (start.style == Shape.S) and (end.style == Shape.S):
             if start.l.low > end.r.high:
                 raise ValueError("SS 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
@@ -517,7 +510,7 @@ class ChanFeature:
                 raise ValueError("XX 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             #return self.start
             return self.end
-        
+
         elif (start.style == Shape.S) and (end.style == Shape.G):
             if start.l.low > end.high:
                 raise ValueError("SG 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
@@ -528,10 +521,10 @@ class ChanFeature:
                 raise ValueError("XD 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             #return self.start
             return self.end
-        
+
         else:
             raise TypeError(doubleRelation(start, end), start.style, end.style)
-    
+
     @property
     def LOW(self) -> int:
         if self.low.style is Shape.X:
@@ -554,7 +547,7 @@ class ChanFeature:
             if start.high < end.low:
                 raise ValueError("GD 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             return Direction.Down
-        
+
         elif (start.style == Shape.D) and (end.style == Shape.S):
             if start.low > end.r.high:
                 raise ValueError("DS 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
@@ -563,7 +556,7 @@ class ChanFeature:
             if start.high < end.r.low:
                 raise ValueError("GX 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             return Direction.Down
-        
+
         elif (start.style == Shape.S) and (end.style == Shape.S):
             if start.l.low > end.r.high:
                 raise ValueError("SS 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
@@ -572,7 +565,7 @@ class ChanFeature:
             if start.l.high < end.r.low:
                 raise ValueError("XX 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             return Direction.Down
-        
+
         elif (start.style == Shape.S) and (end.style == Shape.G):
             if start.l.low > end.high:
                 raise ValueError("SG 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
@@ -581,7 +574,7 @@ class ChanFeature:
             if start.l.high < end.low:
                 raise ValueError("XD 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             return Direction.Down
-        
+
         else:
             raise TypeError(doubleRelation(start, end), start.style, end.style)
 
@@ -662,9 +655,8 @@ class ChanFeature:
             if self.elements[0].LEVEL == self.LEVEL:
                 return 12
         '''
-        
-        return 0
 
+        return 0
 
 @enforce_types
 def mergeFeature(l:ChanFeature, r:ChanFeature) -> ChanFeature:
@@ -691,7 +683,7 @@ def mergeFeature(l:ChanFeature, r:ChanFeature) -> ChanFeature:
             low = min([l.low, r.low], key=lambda x:x.low)
             start = low
             end = high
-                
+
         elif l.direction is Direction.Down:
             if l.HIGH == r.HIGH:
                 print("警告: 向上线段 出现高点相同！！")
@@ -710,12 +702,11 @@ def mergeFeature(l:ChanFeature, r:ChanFeature) -> ChanFeature:
         if l.LEVEL == 0:
             elements = [start.m, end.m]
         #print(elements)
-        
+
         if start.style == end.style:
             raise ValueError("相同分型无法成笔")
         feature = ChanFeature(start, end, elements, level=l.LEVEL, isFixed = l.isFixed + r.isFixed)
         return feature
-
 
 @enforce_types
 class ChanZhongShu:
@@ -730,7 +721,7 @@ class ChanZhongShu:
         if right.check():raise ChanException(right.check())
         if not left.isNext(mid):raise ChanException(f"等级{level}, 无法通过连续性检测", left.end, mid.start)
         if not mid.isNext(right):raise ChanException(f"等级{level}, 无法通过连续性检测", mid.end, right.start)
-        
+
         self.__l, self.__m, self.__r = left, mid, right
 
         self.elements = []
@@ -747,19 +738,18 @@ class ChanZhongShu:
                 #raise ChanException("不是中枢")
                 break
 
-
     @property
     def l(self) -> ChanFeature:
         return self.__l
-        
+
     @property
     def m(self) -> ChanFeature:
         return self.__m
-        
+
     @property
     def r(self) -> ChanFeature:
         return self.__r
-        
+
     @property
     def interval(self) -> ChanCandle:
         if self.m.direction is Direction.Up:
@@ -775,7 +765,7 @@ class ChanZhongShu:
     @property
     def status(self) -> bool:
         return self.DD < self.ZD < self.ZG < self.GG
-    
+
     @property
     def direction(self) -> Direction:
         return self.m.direction
@@ -882,13 +872,12 @@ class ChanZhongShu:
         if not self.ok:
             print("... 不是中枢 ...")
             return 1
-        
+
         if not self.inInterval(feature):
             self.done = True
             return 4
         self.elements.append(feature)
         return 0
-
 
 @enforce_types
 def hasInclude(left:ChanCandle, right:[RawCandle, ChanCandle]) -> Direction:
@@ -896,7 +885,6 @@ def hasInclude(left:ChanCandle, right:[RawCandle, ChanCandle]) -> Direction:
         return Direction.Right # "右" # 右包左, 逆序
     if (left.low <= right.low) and (left.high >= right.high):
         return Direction.Left # "左" # 左包右, 顺序
-
 
 @enforce_types
 def doubleRelation(left:ChanCandle, right:ChanCandle) -> Direction:
@@ -916,7 +904,7 @@ def doubleRelation(left:ChanCandle, right:ChanCandle) -> Direction:
             if left.high < right.low:
                 return Direction.JumpUp # "跳涨"
             return Direction.Up # "上涨"
-        
+
         if (left.low >= right.low) and (left.high >= right.high):
             if left.low > right.high:
                 return Direction.JumpDown # "跳跌"
@@ -936,11 +924,11 @@ def tripleRelation(l:ChanCandle, m:ChanCandle, r:ChanCandle, isRight=False) -> S
     '''
     if any((l == m, m == r, l == r)):
         raise ChanException("相同对象无法比较")
-    
+
     if 1:
         lm = doubleRelation(l, m)
         mr = doubleRelation(m, r)
-        
+
         if lm in (Direction.Up, Direction.JumpUp):
             # 涨
             if mr in (Direction.Up, Direction.JumpUp):
@@ -955,7 +943,7 @@ def tripleRelation(l:ChanCandle, m:ChanCandle, r:ChanCandle, isRight=False) -> S
             if mr is Direction.Right and isRight:
                 # 逆序包含
                 return Shape.S
-                
+
         if lm in (Direction.Down, Direction.JumpDown):
             # 跌
             if mr in (Direction.Up, Direction.JumpUp):
@@ -970,7 +958,7 @@ def tripleRelation(l:ChanCandle, m:ChanCandle, r:ChanCandle, isRight=False) -> S
             if mr is Direction.Right and isRight:
                 # 逆序包含
                 return Shape.X
-            
+
         if lm is Direction.Left:
             # 顺序包含
             raise ValueError("顺序包含 lm")
@@ -1018,7 +1006,6 @@ class logging(object):
     def info(self, *args):
         if self.level >= 1:
             self.__print(self.level, *args, file=self.outstream)
-
 
 def print(*args, **kwords):
     result = []
@@ -1084,7 +1071,7 @@ class FeatureMachine:
     def __init__(self):
         self._left, self._mid, self._right = (None, None, None)
         self._deal_left, self._deal_mid, self._deal_right = (1,0,0)
-    
+
     def setMid(self, t, n):
         #print(n, t)
         self._mid = t
@@ -1096,7 +1083,6 @@ class FeatureMachine:
     def setRight(self, t, n):
         #print(n, t)
         self._right = t
-
 
 class Stack(object):
     def __init__(self):
@@ -1120,7 +1106,6 @@ class Stack(object):
         """
         return self.stack[-1]
 
-
 @enforce_types
 def removeInclude(ck:ChanCandle, raw:RawCandle, direction:Direction) -> ChanCandle:
     elements = ck.elements
@@ -1133,7 +1118,7 @@ def removeInclude(ck:ChanCandle, raw:RawCandle, direction:Direction) -> ChanCand
         high = max(ck.high, raw.high)
     else:
         raise ChanException
-    
+
     if ck.start > ck.end:
         start = high
         end = low
@@ -1141,7 +1126,6 @@ def removeInclude(ck:ChanCandle, raw:RawCandle, direction:Direction) -> ChanCand
         start = low
         end = high
     return ChanCandle(raw.symbol, start, end, elements)
-
 
 @enforce_types
 def handleInclude(l:ChanCandle, r:ChanCandle, raw:RawCandle):
@@ -1157,7 +1141,7 @@ class KlineHandler:
     def __init__(self, klines:List[RawCandle]=[], cklines:List[ChanCandle]=[]):
         self.klines:List[RawCandle] = klines
         self.cklines:List[ChanCandle] = cklines
-    
+
     @property
     def step(self) -> datetime:
         '''周期'''
@@ -1169,26 +1153,26 @@ class KlineHandler:
     def calcBOLL(self, timeperiod=20, std=2):
         # https://blog.csdn.net/qq_41437512/article/details/105473845
         # https://wiki.mbalib.com/wiki/%E5%B8%83%E6%9E%97%E7%BA%BF%E6%8C%87%E6%A0%87
-        
+
         self.calcMA(timeperiod)
         size = len(self.klines)
         if size < timeperiod:return
         last = self.klines[-1]
         second = self.klines[-2]
-        
+
         md = math.sqrt( ((last.close - getattr(last, f"ma{timeperiod}")) ** 2) / timeperiod)
         mb = getattr(second, f"ma{timeperiod}")
         up = mb + std*md
         dn = mb - std*md
         setattr(last, f"boll{timeperiod}", {"up":up, "mid": mb, "dn":dn})
-        
+
     def calcKDJ(self, timeperiod=9, a=2/3, b=1/3):
         # https://wiki.mbalib.com/wiki/%E9%9A%8F%E6%9C%BA%E6%8C%87%E6%A0%87
         size = len(self.klines)
         if size < timeperiod:return
         last = self.klines[-1]
         second = self.klines[-2]
-        
+
         l = min(self.klines[-timeperiod:], key=lambda x:x.low).low
         h = max(self.klines[-timeperiod:], key=lambda x:x.high).high
         n = h-l
@@ -1234,14 +1218,14 @@ class KlineHandler:
         if k in self.klines[-5:]:
             print(self.__class__.__name__, colored("重复k线", "red"))
             return self
-        
+
         if len(self.klines) > 1:
             if self.klines[-1].dt > k.dt:
                 raise ValueError("时序逆序", self.klines[-1].dt, k.dt)
             step = k.dt - self.klines[-1].dt
             if step > self.step:
                 print("### 数据跳跃", step)
-        
+
         self.klines.append(k)
         self.klines[-1].index = len(self.klines)+1
         self.calcMACD()
@@ -1258,13 +1242,13 @@ class KlineHandler:
                 ck = k.toChanCandle()
         else:
             hasReplaced, ck = handleInclude(self.cklines[-2], self.cklines[-1], k)
-            
+
         if hasReplaced:
             self.cklines[-1] = ck
         else:
             self.cklines.append(ck)
         self.cklines[-1].index = len(self.cklines) - 1
-        
+
         return hasReplaced, ck
 
     def pop(self):
@@ -1299,7 +1283,6 @@ class KlineHandler:
             self.cklines[-1] = ck
         return hasReplaced, ck
 
-
 class FenXingHandler(FeatureMachine):
     ''' 分型处理 '''
     def __init__(self):
@@ -1318,7 +1301,7 @@ class FenXingHandler(FeatureMachine):
         #print("堆栈大小", len(self.stack.stack))
         deal, state, candles, style = self.stack.pop()
         #print("# do backed start", deal, state, candles)
-        
+
         deal, state, candles, style = self.stack.gettop()
         self._deal_left, self._deal_mid, self._deal_right = deal
         self.shapeMachine.state = state
@@ -1327,7 +1310,7 @@ class FenXingHandler(FeatureMachine):
         if style:
             return True
         return False
-    
+
     def append(self, ck:ChanCandle, SX=1, right=0):
         # 前进
         fx = None
@@ -1340,7 +1323,7 @@ class FenXingHandler(FeatureMachine):
             if self._deal_left:
                 deal = (0,1,0)
                 self.setLeft(ck, sys._getframe().f_lineno) # self._left = ck
-            
+
             elif self._deal_mid:
                 # 第二特征序列
                 relation = doubleRelation(self._left, ck)
@@ -1350,7 +1333,7 @@ class FenXingHandler(FeatureMachine):
                     deal = (0,0,1)
                     self.setMid(ck, sys._getframe().f_lineno)
                     state = 1
-                    
+
                 elif relation in (Direction.Down, Direction.JumpDown):
                     # 跌
                     # self.log(sys._getframe().f_lineno, "第二特征序列", relation)
@@ -1359,7 +1342,7 @@ class FenXingHandler(FeatureMachine):
                     state = -1
                 else:
                     raise ChanException("存在包含关系", relation)
-            
+
         elif self.shapeMachine.state == 1:#self.machine.is_阳():
             if self._deal_left:
                 deal = (0,1,0)
@@ -1373,7 +1356,7 @@ class FenXingHandler(FeatureMachine):
                     # self.log(sys._getframe().f_lineno, "第二特征序列", relation)
                     deal = (0,0,1)
                     self.setMid(ck, sys._getframe().f_lineno)
-                    
+
                 elif relation in (Direction.Down, Direction.JumpDown):
                     # 跌
                     # self.log(sys._getframe().f_lineno, "第二特征序列", relation)
@@ -1392,7 +1375,7 @@ class FenXingHandler(FeatureMachine):
                     self.setMid(ck, sys._getframe().f_lineno)
                 else:
                     raise TypeError(relation)
-                
+
             elif self._deal_right:
                 # 第三特征序列
                 relation = doubleRelation(self._mid, ck)
@@ -1403,7 +1386,7 @@ class FenXingHandler(FeatureMachine):
                     deal = (0,0,1)
                     self.setLeft(self._mid, sys._getframe().f_lineno)
                     self.setMid(ck, sys._getframe().f_lineno)
-                    
+
                 elif relation in (Direction.Down, Direction.JumpDown):
                     # 下跌， 顶分型成立
                     # self.log(sys._getframe().f_lineno, "第三特征序列", relation)
@@ -1412,7 +1395,7 @@ class FenXingHandler(FeatureMachine):
                     self.setLeft(self._mid, sys._getframe().f_lineno)
                     self.setMid(ck, sys._getframe().f_lineno)
                     state = -1
-                    
+
                 elif relation in (Direction.Left, ):
                     # 顺序包含
                     # self.log(sys._getframe().f_lineno, "第三特征序列", relation)
@@ -1425,7 +1408,7 @@ class FenXingHandler(FeatureMachine):
                     deal = (0,0,1)
                     self.setLeft(self._mid, sys._getframe().f_lineno)
                     self.setMid(ck, sys._getframe().f_lineno)
-                    
+
                 else:
                     raise TypeError(relation)
 
@@ -1443,13 +1426,13 @@ class FenXingHandler(FeatureMachine):
                     deal = (0,0,1)
                     self.setMid(ck, sys._getframe().f_lineno)
                     state = 1
-                    
+
                 elif relation in (Direction.Down, Direction.JumpDown):
                     # 跌
                     # self.log(sys._getframe().f_lineno, "第二特征序列", relation)
                     deal = (0,0,1)
                     self.setMid(ck, sys._getframe().f_lineno)
-                    
+
                 elif relation in (Direction.Left, ):
                     # 顺序包含
                     # self.log(sys._getframe().f_lineno, "第二特征序列", relation)
@@ -1483,12 +1466,12 @@ class FenXingHandler(FeatureMachine):
                     deal = (0,0,1)
                     self.setLeft(self._mid, sys._getframe().f_lineno)
                     self.setMid(ck, sys._getframe().f_lineno)
-                    
+
                 elif relation in (Direction.Left, ):
                     # 顺序包含
                     # self.log(sys._getframe().f_lineno, "第三特征序列", relation)
                     raise ValueError("顺序包含", relation, self._mid, ck)
-                
+
                 elif relation in (Direction.Right, ):
                     # 逆序包含
                     # self.log(sys._getframe().f_lineno, "第三特征序列", relation)
@@ -1499,17 +1482,16 @@ class FenXingHandler(FeatureMachine):
                     self.setMid(ck, sys._getframe().f_lineno)
                 else:
                     raise TypeError(relation)
-        
+
         self._deal_left, self._deal_mid, self._deal_right = deal
         self.shapeMachine.state = state
         candles = self._left, self._mid, self._right
         self.stack.push((deal, state, candles, fx.style if fx else None))
         return fx
 
-
 class BiHandler:
     ''' 笔 处理 '''
-    
+
     @classmethod
     def generator(cls, points: list[int]):
         result = []
@@ -1521,7 +1503,7 @@ class BiHandler:
             s = points[i]
             e = points[i+1]
             m = abs(s-e) * 0.2
-            
+
             h = s
             n = 0
             while n < 5:
@@ -1546,50 +1528,48 @@ class BiHandler:
                 n += 1
             i += 1
         return result
-            
-        
-    
+
     def __init__(self, cklines:List[ChanCandle], zsh=None):
         self.cklines:List[ChanCandle] = cklines
         self.points:List[ChanFenXing] = []
         self.features:List[ChanFeature] = []
         self.biMachine = Machine([0,-1,1,-2,2]) # -2, 太阴, -1, 少阴, 0, 混沌, 1, 少阳, 2, 太阳
-        
+
         self.hasUpdated = False
         self.hasBacked = False
         self.hasReplaced = False
         self.poped = 0
         self.appended = 0
-        
+
         self.debug = 0
         self.logging = None
         self.B = None
         self.T = None
-        
+
         self.stack = Stack()
-        
+
         self.stateStack = Stack()
         self.stateStack.push(self.biMachine.state)
-        
+
         self.zsh = zsh
         self.isVisual = False
         self.lastFx = None
-    
+
     def log(self, *args, **kwords):
         if self.debug:print("+", self.LEVEL, self.__class__.__name__, *args, **kwords)
         if self.logging:
             self.logging.debug(self.__class__.__name__, *args, **kwords)
-    
+
     def visual(self) -> ChanFeature:
         if self.isVisual:...
-            
+
     @property
     def LEVEL(self) -> int:
         return 0
     @property
     def state(self):
         return {0:"混沌", 1:"少阳", 2:"老阳", -1:"少阴", -2:"老阴"} [self.biMachine.state]
-    
+
     def checkSegments(self):
         """ 检测每笔 是否有BUG """
         count = 0
@@ -1605,7 +1585,7 @@ class BiHandler:
                 if not (feature.end.m.low == min(feature.elements, key=lambda x:x.low).low):
                     print( 4, count)
             count += 1
-                
+
     @enforce_types
     def __replace_bi(self, fx:ChanFenXing, n:int):
         ck, old = self.__pop_bi(n)
@@ -1631,7 +1611,7 @@ class BiHandler:
                 start = self.points[-2]
                 end = self.points[-1]
                 bi = ChanFeature(start, end, self.cklines[start.m.index:end.m.index+1], level=0)
-                
+
                 if self.features:
                     if not self.features[-1].isNext(bi):
                         raise ValueError("无法连接", self.features[-1].end, bi.start, len(self.features))
@@ -1665,7 +1645,7 @@ class BiHandler:
                         print(bi.start.dt, "向下笔, 终点不是最低点", "\nlow:", low, "\nend:", end.m)
                         #raise Exception
                 self.appended += 1
-                
+
                 # 处理中枢
                 if self.zsh:
                     self.zsh.append(bi)
@@ -1701,11 +1681,10 @@ class BiHandler:
             self.log("line:", n, colored("__pop_bi is called", "green"), tz)
             return fx, tz
 
-    
     @enforce_types
     def getLow(self, l: ChanCandle, r: ChanCandle):
         return min(self.cklines[l.index:r.index], key=lambda x:x.low)
-    
+
     @enforce_types
     def getHigh(self, l: ChanCandle, r: ChanCandle):
         return max(self.cklines[l.index:r.index], key=lambda x:x.high)
@@ -1720,7 +1699,6 @@ class BiHandler:
         high = max(self.cklines[l.index:r.index+1], key=lambda x:x.high).high
         if high == r.high:return True
 
-
     @enforce_types
     def isBi(self, start: ChanCandle, end: ChanCandle, mode=None, offset=5, isNew=1):
         if start.dt > end.dt:return -1
@@ -1729,18 +1707,18 @@ class BiHandler:
             return 8
         bi = self.cklines[start.index: end.index+1]
         size = len(bi)
-        
+
         if isNew:
             offset = 4
             realSize = sum([len(k.elements) for k in bi])
             if realSize <= 4:
                 ...
                 return 2
-        
+
         if size < offset:
             return 3
         return 0
-    
+
     @enforce_types
     def problem(self, start: ChanCandle, end: ChanCandle, mode=None, offset=5, isNew=1):
         t = self.isBi(start, end, mode, offset, isNew)
@@ -1749,19 +1727,19 @@ class BiHandler:
 
         if relation in (Direction.Up, Direction.JumpUp):
             if not self.isHigh(start, end):return 5
-            
+
         elif relation in (Direction.Down, Direction.JumpDown):
             if not self.isLow(start, end):return 7
-        
+
         else:
             return 8
         return 0
-    
+
     def checkPoints(self, fx):
         states = {-1: Shape.G, -2: Shape.D, 1:Shape.D, 2:Shape.G}
         if not (self.points[-1].style is states[self.biMachine.state]):
             raise ChanException(self.state, "状态不符", self.points[-1].style, "last style:", fx.style)
-    
+
     def pop(self):
         if self.points:
             ck = self.cklines[-1]
@@ -1771,8 +1749,7 @@ class BiHandler:
                 self.__pop_bi(sys._getframe().f_lineno)
                 self.stateStack.pop()
                 self.biMachine.state = self.stateStack.gettop()
-                
-        
+
     @enforce_types
     def append(self, fx: ChanFenXing):
         self.hasUpdated = False
@@ -1780,7 +1757,7 @@ class BiHandler:
         self.hasReplaced = False
         self.poped = 0
         self.appended = 0
-        
+
         self.isVisual = False
 
         if not self.points:
@@ -1795,7 +1772,7 @@ class BiHandler:
             print("@@@@初始化@@@@")
             self.stateStack.push(self.biMachine.state)
             return self
-        
+
         if fx in self.points[-10:]:
             print("bi 存在退出",len(self.points), fx)
             return self
@@ -1819,14 +1796,14 @@ class BiHandler:
                     self.stateStack.pop()
                     self.biMachine.state = self.stateStack.gettop()
                     state = self.stateStack.gettop()
-                    
+
                 #raise ChanException("什么情况， 无法替换")
-                
+
             if fx.style is Shape.D: # 底分型
                 if self.biMachine.state == 0:
                     self.__append_bi(fx, sys._getframe().f_lineno)
                     state = -2
-                    
+
                 elif self.biMachine.state == -1:
                     if not self.problem(self.points[-1].m, fx.m, isNew=isNew):
                         if len(self.points) > 1:
@@ -1837,13 +1814,13 @@ class BiHandler:
                         self.__append_bi(fx, sys._getframe().f_lineno)
                         state = -2
                         self.log(colored("转换状态, 少阴至太阴", "red"))
-    
+
                 elif self.biMachine.state == 1:
                     if fx.low < self.points[-1].low:
                         self.log(colored("非正常替换 1", "red"))
                         self.__replace_bi(fx, sys._getframe().f_lineno)
                         state = -2
-    
+
                 elif self.biMachine.state == -2:
                     if fx.low <= self.points[-1].low:
                         if self.T and SX:
@@ -1859,7 +1836,7 @@ class BiHandler:
                     #else:
                     #    if 0 == self.isBi(self.points[-1].m, fx.r, isNew=isNew):
                     #        state = 1
-    
+
                 elif self.biMachine.state == 2:
                     if not self.problem(self.points[-1].m, fx.m, isNew=isNew):
                         self.__append_bi(fx, sys._getframe().f_lineno)
@@ -1893,32 +1870,30 @@ class BiHandler:
                                                     ...
                                             else:
                                                 raise TypeError("分型错误")
-                                                    
-                                        
+
                                         else:
                                             self.B = fx
                                             self.log("设置 1")
                                             info = info + "设置1"
                                     else:
                                         raise Exception("分型错误")
-                        
 
                 else:
                     raise ChanException("未知状态", self.state, self.points)
                 break
-            
+
             elif fx.style is Shape.G: # 顶分型
                 if self.biMachine.state == 0:
                     self.__append_bi(fx, sys._getframe().f_lineno)
                     state = 2
-                
+
                 elif self.biMachine.state == -1:
                     if fx.high > self.points[-1].high:
                         self.log(colored("非正常替换 2", "red"))
                         self.__replace_bi(fx, sys._getframe().f_lineno)
                         state = 2
                         break
-    
+
                 elif self.biMachine.state == 1:
                     if not self.problem(self.points[-1].m, fx.m, isNew=isNew):
                         if len(self.points) > 1:
@@ -1930,7 +1905,7 @@ class BiHandler:
                         state = 2
                         self.log(colored("转换状态, 少阳至太阳", "red"))
                         break
-    
+
                 elif self.biMachine.state == -2:
                     if not self.problem(self.points[-1].m, fx.m, isNew=isNew):
                         self.__append_bi(fx, sys._getframe().f_lineno)
@@ -1963,18 +1938,14 @@ class BiHandler:
                                                     ...
                                             else:
                                                 raise TypeError("分型错误")
-                                                    
-                                        
+
                                         else:
                                             self.T = fx
                                             self.log("设置 2")
                                             info = info + "设置2"
                                     else:
                                         raise Exception("分型错误")
-                        
-                                            
-                        
-                                
+
                 elif self.biMachine.state == 2:
                     if fx.high >= self.points[-1].high:
                         if self.B and SX:
@@ -1999,7 +1970,7 @@ class BiHandler:
             elif fx.style is Shape.S: # 上升分型
                 if self.biMachine.state == 1:
                     ...
-                
+
                 elif self.biMachine.state == -1:
                     if fx.r.high > self.points[-1].high:
                         self.__pop_bi(sys._getframe().f_lineno)
@@ -2021,7 +1992,7 @@ class BiHandler:
                         self.__pop_bi(sys._getframe().f_lineno)
                         state = 1
                         self.log(colored("转换状态, 太阳至少阳", "red"))
-    
+
                 elif self.biMachine.state == -2:
                     if not self.problem(self.points[-1].m, fx.r, isNew=isNew):
                         state = 1
@@ -2031,20 +2002,20 @@ class BiHandler:
                         if len(self.points) > 1 and fx.high > self.points[-2].high:
                             info = "上涨设置"
                             fx.r.info = self.state + "::" + info
-                    
+
                 else:
                     raise ChanException("未知状态", self.state)
-    
+
             elif fx.style is Shape.X: # 下降分型
                 if self.biMachine.state == 1:
                     if fx.r.low < self.points[-1].low:
                         self.__pop_bi(sys._getframe().f_lineno)
                         state = -1
                         self.log(colored("从 少阳 到 少阴。", "red"))
-                
+
                 elif self.biMachine.state == -1:
                     ...
-                
+
                 elif self.biMachine.state == 2:
                     if not self.problem(self.points[-1].m, fx.r, isNew=isNew):
                         state = -1
@@ -2053,7 +2024,7 @@ class BiHandler:
                         if len(self.points) > 1 and fx.low < self.points[-2].low:
                             info = "下跌设置1"
                             fx.r.info = self.state + "::" + info
-    
+
                 elif self.biMachine.state == -2:
                     if fx.r.low < self.points[-1].low:
                         if self.T and SX:
@@ -2075,12 +2046,11 @@ class BiHandler:
             else:
                 print("*   ### unknow 分型", fx.style, "###   *")
             break
-    
+
         self.biMachine.state = state
         fx.m.info = info + "::" + self.state
         #print(" ", self.appended, self.poped)
         if self.stateStack.gettop()!=state:self.stateStack.push(self.biMachine.state)
-
 
 @enforce_types
 class ZhongShuHandler(FeatureMachine):
@@ -2092,9 +2062,9 @@ class ZhongShuHandler(FeatureMachine):
         self.stack = Stack()
         self.debug = 0
         self.logging = None
-        
+
         self.features = []
-        
+
         deal = self._deal_left, self._deal_mid, self._deal_right
         state = self.zsMachine.state
         features = self._left, self._mid, self._right
@@ -2106,25 +2076,25 @@ class ZhongShuHandler(FeatureMachine):
     @property
     def state(self):
         return {0: "混沌", 1: "阳", -1: "阴"}[self.zsMachine.state]
-    
+
     def log(self, *args, **kwords):
         if self.debug:print("+", self.LEVEL, self.__class__.__name__, *args, **kwords)
         if self.logging:
             self.logging.debug(self.__class__.__name__, *args, **kwords)
-    
+
     @enforce_types
     def append(self, feature: [ChanCandle, ChanFeature]):
         t = feature.check()
         if t:raise ChanException("ZhongShuHandler append", t)
-        
+
         if self.features and (not self.features[-1].isNext(feature)):
             raise ChanException("中枢， 首尾不呼应", self.features[-1], feature)
-        
+
         self.features.append(feature)
-        
+
         state = self.zsMachine.state
         deal  = self._deal_left, self._deal_mid, self._deal_right
-        
+
         self.log("APPEND", self.state, len(self.zhshs), deal, feature)
         while 1:
             if self.zsMachine.state == 0:
@@ -2132,7 +2102,7 @@ class ZhongShuHandler(FeatureMachine):
                 if self._deal_left:
                     self.setLeft(feature, sys._getframe().f_lineno)
                     deal = (0,1,0)
-                
+
                 elif self._deal_mid:
                     self.setMid(feature, sys._getframe().f_lineno)
                     deal = (0,0,1)
@@ -2140,7 +2110,7 @@ class ZhongShuHandler(FeatureMachine):
                         raise ChanException("")
                     if not self._left.isNext(feature):
                         raise Exception("不连续 1")
-                
+
                 elif self._deal_right:
                     self.setRight(feature, sys._getframe().f_lineno)
                     deal = (0,0,1)
@@ -2148,7 +2118,7 @@ class ZhongShuHandler(FeatureMachine):
                         raise ChanException("")
                     if not self._mid.isNext(feature):
                         raise Exception("不连续 2")
-                    
+
                     zs = ChanZhongShu(feature.symbol, self._left, self._mid, self._right, feature.LEVEL)
                     if zs.ok:
                         if self._left.direction is Direction.Up:
@@ -2162,10 +2132,10 @@ class ZhongShuHandler(FeatureMachine):
                         self.setLeft(self._mid, sys._getframe().f_lineno)
                         self.setMid(self._right, sys._getframe().f_lineno)
                         self.setRight(None, sys._getframe().f_lineno)
-                    
+
                 else:
                     raise Exception
-                
+
             elif self.zsMachine.state in (1, -1):
                 # 形成 (下上下 上涨中枢, 上下上 下跌中枢)
                 zs = self.zhshs[-1]
@@ -2174,16 +2144,17 @@ class ZhongShuHandler(FeatureMachine):
                     deal = (0,1,0)
                     state = 0
                     self.setLeft(feature, sys._getframe().f_lineno)
-                    
+
                     if self.zsMachine.state == 1:
                         name = "上涨"
                     elif self.zsMachine.state == -1:
                         name = "下跌"
                     else:
                         raise Exception(self.state)
-                    
+
                     ## 信号 ##
-                    relation = doubleRelation(zs.interval, feature.toPillar()) 
+                    relation = doubleRelation(zs.interval, feature.toPillar())
+
                     if relation is Direction.JumpUp:
                         print("ZhongShuHandler", zs.LEVEL, f"向上突破 {name}中枢 形成 盘整三买")
                         k = min(feature.low.m.elements, key=lambda x:x.low)
@@ -2195,10 +2166,10 @@ class ZhongShuHandler(FeatureMachine):
                         #k.mark.update({feature.LEVEL: f"向下突破 {name}中枢 形成 盘整三卖"})
                     #else:
                     #    raise Exception(t, relation)
-                    
+
                     self.log("中枢跳出")
                     break
-                    
+
                 if self._deal_right:
                     self.setLeft (self._mid, sys._getframe().f_lineno)
                     self.setMid(self._right, sys._getframe().f_lineno)
@@ -2209,14 +2180,13 @@ class ZhongShuHandler(FeatureMachine):
 
             else:
                 raise Exception
-            
+
             break
-        
+
         self.zsMachine.state = state
         self._deal_left, self._deal_mid, self._deal_right = deal
         self.log()
-        
-    
+
     @enforce_types
     def pop(self, tz: [ChanCandle, ChanFeature], n):
         state = self.zsMachine.state
@@ -2230,19 +2200,19 @@ class ZhongShuHandler(FeatureMachine):
                 if self._deal_left:
                     #if self.features:
                     #    t = self.features[-1]
-                    
+
                     self.setLeft(None, sys._getframe().f_lineno)
                     self.setMid(None, sys._getframe().f_lineno)
                     self.setRight(None, sys._getframe().f_lineno)
                     deal = (1,0,0)
-                
+
                 elif self._deal_mid:
                     t = self._left
                     self.setLeft(None, sys._getframe().f_lineno)
                     self.setMid(None, sys._getframe().f_lineno)
                     self.setRight(None, sys._getframe().f_lineno)
                     deal = (1,0,0)
-                
+
                 elif self._deal_right:
                     t = self._mid
                     #self.setLeft(None, sys._getframe().f_lineno)
@@ -2251,11 +2221,11 @@ class ZhongShuHandler(FeatureMachine):
                     deal = (0,1,0)
                     if self._left.check():
                         raise ChanException("")
-                
+
                 else:
                     raise Exception("deal", self._deal_left, self._deal_mid, self._deal_right)
                 break
-                
+
             elif self.zsMachine.state in (1, -1):
                 # 处于中枢状态 (下上下 上涨中枢, 上下上 下跌中枢)
                 zs = self.zhshs[-1]
@@ -2274,9 +2244,9 @@ class ZhongShuHandler(FeatureMachine):
 
             else:
                 raise Exception
-            
+
             break
-        
+
         self.zsMachine.state = state
         self._deal_left, self._deal_mid, self._deal_right = deal
         '''
@@ -2288,7 +2258,6 @@ class ZhongShuHandler(FeatureMachine):
         self.features.pop()
         self.log()
         return t
-
 
 @enforce_types
 class FeatureHandler(FeatureMachine):
@@ -2304,10 +2273,10 @@ class FeatureHandler(FeatureMachine):
         self.lastMerge = None
         self.debug = 0
         self.logging = None
-        
+
         self.__level = level
         self.zsh = zsh
-        
+
         self.isVisual = False
         self.visual = None
         self.last = None
@@ -2319,7 +2288,6 @@ class FeatureHandler(FeatureMachine):
         self.stack.push((deal, state, candles, 0))
         self.poped = 0
         self.appended = 0
-        
 
     @enforce_types
     def getVisual(self, segment: ChanFeature):
@@ -2329,7 +2297,7 @@ class FeatureHandler(FeatureMachine):
             elif self.featureMachine.state == 1:
                 if self._deal_left:...
                 elif self._deal_left:...
-                
+
             elif self.featureMachine.state == -1:
                 ...
             elif self.featureMachine.state == 2:
@@ -2338,7 +2306,7 @@ class FeatureHandler(FeatureMachine):
                 ...
             else:
                 ...
-                
+
     @property
     def LEVEL(self):
         return self.__level
@@ -2358,18 +2326,18 @@ class FeatureHandler(FeatureMachine):
         point = None
         feature = None
         zfeature = None
-        
+
         if self.points:
             point = self.points.pop()
             self.log(colored("pop point", "yellow"), point)
-        
+
         if self.features:
             feature = self.features.pop()
             self.log(colored("pop feature", "yellow"), feature)
             self.poped += 1
             if self.zsh:
                 zfeature = self.zsh.pop(feature, sys._getframe().f_lineno)
-        
+
         if feature and zfeature:
             if feature != zfeature:
                 print("什么情况")
@@ -2433,8 +2401,7 @@ class FeatureHandler(FeatureMachine):
     @enforce_types
     def replace(self, segment:ChanFeature, n:int):
         ...
-        
-    
+
     @enforce_types
     def pop(self, n:int):
         self.log(colored("POP", "red"), self.state, "stack size:", len(self.stack.stack)-1, "segments size:", len(self.segments), "points size:", len(self.points))
@@ -2487,23 +2454,23 @@ class FeatureHandler(FeatureMachine):
                 self.__append_segment(segment.start, sys._getframe().f_lineno)
                 ADD += 1
                 break
-            
+
             elif self.featureMachine.state == 1:
                 # 少阳
                 if segment.direction is Direction.Up:
                     self.log("不需要处理 1")
                     break
-    
+
                 if self._deal_left:
                     self.log(sys._getframe().f_lineno, "第一特征序列", segment)
                     deal = (0,1,0)
                     self.setLeft(segment, sys._getframe().f_lineno)
-    
+
                 elif self._deal_mid:
                     # 第二特征序列
                     if self._left.direction != segment.direction:
                         raise Exception(self.state)
-    
+
                     relation = doubleRelation(self._left.toPillar(), segment.toPillar())
                     if relation in (Direction.Up, Direction.JumpUp, Direction.Right):
                         # 涨, 逆序包含
@@ -2511,7 +2478,7 @@ class FeatureHandler(FeatureMachine):
                         deal = (0,0,1)
                         self.setMid(segment, sys._getframe().f_lineno)
                         self.isVisual = True
-    
+
                     elif relation in (Direction.Down, Direction.JumpDown):
                         # 跌
                         self.log(sys._getframe().f_lineno, "第二特征序列 下跌跳转", relation)
@@ -2520,7 +2487,7 @@ class FeatureHandler(FeatureMachine):
                         deal = (0,1,0)
                         self.setLeft(self.segments[-2], sys._getframe().f_lineno)
                         state = -1
-    
+
                     elif relation in (Direction.Left,):
                         # 顺序包含
                         self.log(sys._getframe().f_lineno, "第二特征序列 顺序包含", relation)
@@ -2529,12 +2496,12 @@ class FeatureHandler(FeatureMachine):
                         self.setLeft(self.lastMerge, sys._getframe().f_lineno)
                     else:
                         raise TypeError(relation)
-                
+
                 elif self._deal_right:
                     # 第三特征序列
                     if self._mid.direction != segment.direction:
                         raise Exception(self._mid.direction, segment.direction)
-    
+
                     relation = doubleRelation(self._mid.toPillar(), segment.toPillar())
                     if relation in (Direction.Up, Direction.JumpUp, Direction.Right):
                         # 涨, 逆序包含
@@ -2553,7 +2520,7 @@ class FeatureHandler(FeatureMachine):
                         self.setLeft(self._mid, sys._getframe().f_lineno)
                         self.setMid(segment, sys._getframe().f_lineno)
                         self.isVisual = True
-    
+
                     elif relation in (Direction.Down, Direction.JumpDown):
                         # 下跌， 顶分型成立
                         if Direction.JumpUp is doubleRelation(self._left.toPillar(), self._mid.toPillar()):
@@ -2571,7 +2538,7 @@ class FeatureHandler(FeatureMachine):
                             ADD += 1
                             self.setLeft(self.segments[-2], sys._getframe().f_lineno)
                             state = -1
-    
+
                     elif relation in (Direction.Left,):
                         # 顺序包含
                         self.log(sys._getframe().f_lineno, "第三特征序列 顺序包含", relation)
@@ -2581,22 +2548,22 @@ class FeatureHandler(FeatureMachine):
                         self.isVisual = True
                     else:
                         raise TypeError(relation)
-    
+
             elif self.featureMachine.state == -1:
                 if segment.direction is Direction.Down:
                     self.log("不需要处理 -1")
                     break
-    
+
                 if self._deal_left:
                     self.log(sys._getframe().f_lineno, "第一特征序列", segment)
                     deal = (0,1,0)
                     self.setLeft(segment, sys._getframe().f_lineno)
-    
+
                 elif self._deal_mid:
                     # 第二特征序列
                     if self._left.direction != segment.direction:
                         raise Exception()
-    
+
                     relation = doubleRelation(self._left.toPillar(), segment.toPillar())
                     if relation in (Direction.Up, Direction.JumpUp):
                         # 涨
@@ -2606,14 +2573,14 @@ class FeatureHandler(FeatureMachine):
                         deal = (0,1,0)
                         self.setLeft(self.segments[-2], sys._getframe().f_lineno)
                         state = 1
-    
+
                     elif relation in (Direction.Down, Direction.JumpDown, Direction.Right):
                         # 跌, 逆序包含
                         self.log(sys._getframe().f_lineno, "第二特征序列", relation)
                         deal = (0,0,1)
                         self.setMid(segment, sys._getframe().f_lineno)
                         self.isVisual = True
-    
+
                     elif relation in (Direction.Left,):
                         # 顺序包含
                         self.log(sys._getframe().f_lineno, "第二特征序列 顺序包含", relation)
@@ -2622,12 +2589,12 @@ class FeatureHandler(FeatureMachine):
                         self.setLeft(self.lastMerge, sys._getframe().f_lineno)
                     else:
                         raise TypeError(relation)
-    
+
                 elif self._deal_right:
                     # 第三特征序列
                     if self._mid.direction != segment.direction:
                         raise Exception(self._mid, segment)
-    
+
                     relation = doubleRelation(self._mid.toPillar(), segment.toPillar())
                     if relation in (Direction.Up, Direction.JumpUp):
                         # 涨
@@ -2647,7 +2614,7 @@ class FeatureHandler(FeatureMachine):
                             self.setLeft(self.segments[-2], sys._getframe().f_lineno)
                             # self.setMid(None, sys._getframe().f_lineno)
                             state = 1
-    
+
                     elif relation in (Direction.Down, Direction.JumpDown, Direction.Right):
                         # 跌, 逆序包含
                         if (self._mid.direction is Direction.Up) and (self._mid.LOW == segment.LOW) and (relation is Direction.Right):
@@ -2660,13 +2627,13 @@ class FeatureHandler(FeatureMachine):
                             self.setLeft(self.segments[-2], sys._getframe().f_lineno)
                             self.setMid(None, sys._getframe().f_lineno)
                             break
-                        
+
                         self.log(sys._getframe().f_lineno, "第三特征序列", relation)
                         deal = (0,0,1)
                         self.setLeft(self._mid, sys._getframe().f_lineno)
                         self.setMid(segment, sys._getframe().f_lineno)
                         self.isVisual = True
-    
+
                     elif relation in (Direction.Left,):
                         # 顺序包含
                         self.log(sys._getframe().f_lineno, "第三特征序列 顺序包含", relation)
@@ -2674,10 +2641,10 @@ class FeatureHandler(FeatureMachine):
                         self.lastMerge = mergeFeature(self._mid, segment)
                         self.setMid(self.lastMerge, sys._getframe().f_lineno)
                         self.isVisual = True
-    
+
                     else:
                         raise TypeError(relation)
-    
+
             elif self.featureMachine.state == 2:
                 if segment.direction is Direction.Down:
                     self.log("不需要处理 2")
@@ -2688,24 +2655,24 @@ class FeatureHandler(FeatureMachine):
                     self.isVisual = True
                     if self._left.direction != segment.direction:
                         raise Exception()
-    
+
                     relation = doubleRelation(self._left.toPillar(), segment.toPillar())
                     if relation in (Direction.Up, Direction.JumpUp, Direction.Right, Direction.Down, Direction.JumpDown):
                         # 涨, 跌, 逆序包含
                         self.log(sys._getframe().f_lineno, "第二特征序列 缺口模式", relation)
                         deal = (0,0,1)
                         self.setMid(segment, sys._getframe().f_lineno)
-        
+
                     elif relation in (Direction.Left,):
                         # 顺序包含
                         self.log(sys._getframe().f_lineno, "第二特征序列 缺口模式 顺序包含", relation)
                         deal = (0,1,0)
                         self.lastMerge = mergeFeature(self._left, segment)
                         self.setLeft(self.lastMerge, sys._getframe().f_lineno)
-    
+
                     else:
                         raise TypeError(relation)
-    
+
                 elif self._deal_right:
                     # 第三特征序列
                     if self._mid.direction != segment.direction:
@@ -2722,7 +2689,7 @@ class FeatureHandler(FeatureMachine):
                         if self._left.direction != Direction.Down:
                             raise Exception()
                         state = 1
-    
+
                     elif relation in (Direction.Down, Direction.JumpDown):
                         # 下跌
                         self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 跳转", relation)
@@ -2734,7 +2701,7 @@ class FeatureHandler(FeatureMachine):
                         if self._left.direction != self._mid.direction or self._mid.direction is Direction.Down:
                             raise Exception()
                         state = -1
-    
+
                     elif relation in (Direction.Left,):
                         # 顺序包含
                         self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 顺序包含", relation)
@@ -2751,7 +2718,7 @@ class FeatureHandler(FeatureMachine):
                         self.isVisual = True
                     else:
                         raise TypeError(relation)
-    
+
             elif self.featureMachine.state == -2:
                 if segment.direction is Direction.Up:
                     self.log("不需要处理 -2")
@@ -2769,7 +2736,7 @@ class FeatureHandler(FeatureMachine):
                         self.log(sys._getframe().f_lineno, "第二特征序列 缺口模式", relation)
                         deal = (0,0,1)
                         self.setMid(segment, sys._getframe().f_lineno)
-            
+
                     elif relation in (Direction.Left,):
                         # 顺序包含
                         self.log(sys._getframe().f_lineno, "第二特征序列 缺口模式 顺序包含", relation)
@@ -2779,12 +2746,12 @@ class FeatureHandler(FeatureMachine):
                     else:
                         raise TypeError(relation)
                     self.isVisual = True
-    
+
                 elif self._deal_right:
                     # 第三特征序列
                     if self._mid.direction != segment.direction:
                         raise Exception("应该:", str(segment.direction), "实际:", str(self._mid.direction))
-    
+
                     relation = doubleRelation(self._mid.toPillar(), segment.toPillar())
                     if relation in (Direction.Up, Direction.JumpUp):
                         # 涨
@@ -2795,7 +2762,7 @@ class FeatureHandler(FeatureMachine):
                         self.setLeft(self.segments[-3], sys._getframe().f_lineno)
                         self.setMid(self.segments[-1], sys._getframe().f_lineno)
                         state = 1
-    
+
                     elif relation in (Direction.Down, Direction.JumpDown):
                         # 跌
                         self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 正常跳转", relation)
@@ -2805,7 +2772,7 @@ class FeatureHandler(FeatureMachine):
                         deal = (0,1,0)
                         self.setLeft(self.segments[-2], sys._getframe().f_lineno)
                         state = -1
-    
+
                     elif relation in (Direction.Left,):
                         # 顺序包含
                         self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 顺序包含", relation)
@@ -2813,7 +2780,7 @@ class FeatureHandler(FeatureMachine):
                         self.lastMerge = mergeFeature(self._mid, segment)
                         self.setMid(self.lastMerge, sys._getframe().f_lineno)
                         self.isVisual = True
-    
+
                     elif relation in (Direction.Right,):
                         # 逆序包含
                         self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 逆序包含", relation)
@@ -2824,14 +2791,13 @@ class FeatureHandler(FeatureMachine):
                     else:
                         raise TypeError(relation)
             break
-        
+
         self.last = segment
         self.featureMachine.state = state
         self._deal_left, self._deal_mid, self._deal_right = deal
         candles = self._left, self._mid, self._right
         self.stack.push((deal, state, candles, ADD))
         self.log()
-        
 
 class ChanZouShi:
     ...
@@ -2853,22 +2819,22 @@ class ChZhShCh:
         #super(BiHandler, self).__init__(0, zsh)
         self.cklines = [] # 缠论k线
         self.klines = []
-        
+
         self.debug = 0
-        
+
         self.logging = logging("chzhshch2")
         self.logging.outstream = open("chzhshch2.log", "w")
-        
+
         self.klineHandler = KlineHandler(self.klines, self.cklines)
         self.shapeHandler = FenXingHandler()
-        
+
         self.biHandler = BiHandler(self.cklines)
         self.bzsHandler = ZhongShuHandler(self.biHandler.LEVEL)
         self.bzsHandler.logging = self.logging
         self.biHandler.logging = self.logging
         self.biHandler.zsh = self.bzsHandler
         #self.biHandler.debug = 1
-        
+
         self.featureHandler = FeatureHandler(1)
         self.featureHandler.logging = self.logging
         self.zsHandler = ZhongShuHandler(self.featureHandler.LEVEL)
@@ -2883,7 +2849,7 @@ class ChZhShCh:
             if flag:result.append(k)
             if k.dt == end:break
         return result
-    
+
     def getDebugInfo(self):
         """ 将发现的问题发送邮件
         """
@@ -2894,8 +2860,7 @@ class ChZhShCh:
         with open(f"chzhshch_log_{int(datetime.now().timestamp())}", "wb") as f:
             f.write(bio.getbuffer())
             print("文件保存在:", f.name)
-            
-        
+
     def __del__(self):
         self.logging.outstream.close()
     def __getitem__(self, obj):
@@ -2907,7 +2872,6 @@ class ChZhShCh:
     def log(self, *args):
         if self.debug:print("*", *args)
 
-    
     def pop(self):
         hasReplaced, ck = self.klineHandler.pop()
         self.shapeHandler.pop()
@@ -2922,11 +2886,11 @@ class ChZhShCh:
                 elif state == (1,0):
                     if not self.biHandler.hasUpdated:raise Exception
                     self.featureHandler.append(self.biHandler.features[-1])
-                    
+
                 elif state == (0,1):
                     if not self.biHandler.hasBacked:raise Exception
                     self.featureHandler.pop(sys._getframe().f_lineno)
-                
+
                 elif state == (1,1):
                     #if not self.biHandler.hasReplaced:raise Exception
                     self.featureHandler.pop(sys._getframe().f_lineno)
@@ -2948,8 +2912,7 @@ class ChZhShCh:
                     self.featureHandler.pop(sys._getframe().f_lineno)
                 else:
                     raise ValueError("未处理此状态", state)
-            
-        
+
     @enforce_types
     def add(self, k: RawCandle):
         # 当下模式
@@ -2970,11 +2933,11 @@ class ChZhShCh:
                 elif state == (1,0):
                     if not self.biHandler.hasUpdated:raise Exception
                     self.featureHandler.append(self.biHandler.features[-1])
-                    
+
                 elif state == (0,1):
                     if not self.biHandler.hasBacked:raise Exception
                     self.featureHandler.pop(sys._getframe().f_lineno)
-                
+
                 elif state == (1,1):
                     #if not self.biHandler.hasReplaced:raise Exception
                     self.featureHandler.pop(sys._getframe().f_lineno)
@@ -2985,7 +2948,7 @@ class ChZhShCh:
                     self.featureHandler.append(self.biHandler.features[-1])
                 else:
                     raise ValueError("未处理此状态", state)
-    
+
     @enforce_types
     def addraw(self, symbol:str, dt:datetime, open:[int, float], high:[int, float], low:[int, float], close:[int, float], vol:[int, float]):
         k = RawCandle(symbol, dt, open, high, low, close, vol)
@@ -3029,15 +2992,15 @@ class ChZhShCh:
             tmp.update({"symbolSize":7})
             result.append(tmp)
         mark = result
-        
+
         #bi = [{"dt":k.dt, "bi": k.low if k.style is Shape.D else k.high} for k in self.biHandler.points]
         xd = []
         if self.featureHandler:
             size = len(self.featureHandler.points)
-            
+
             for i in range(size):
                 k = self.featureHandler.points[i]
-    
+
                 if k.style is Shape.G:
                     if useReal:
                         k = max(k.elements, key=lambda x:x.high)
@@ -3050,15 +3013,14 @@ class ChZhShCh:
                   'dt': k.dt,
                   'xd': point,
                   'bi': point})
-        
+
         if useReal:
             charts = kline_pro([x.candleDict() for x in self.klines], bi = bi, xd=xd, mark=mark,title=self.klines[0].symbol)
         else:
             charts = kline_pro([x.candleDict() for x in self.cklines], bi = bi, xd=xd, mark=mark,title=self.cklines[0].symbol)
-            
+
         charts.render(path)
         return charts
-
 
 class Bitstamp:
     def __init__(self, pair, m, size):
@@ -3066,7 +3028,7 @@ class Bitstamp:
         self.freq = m * 60
         self.pair = pair
         NetKLine.getBitstamp(self.czsc, pair, self.freq, size)
-    
+
     def update(self):
         js = Bitstamp.get(self.pair, self.freq, self.czsc.klines[-1].dt, None)
         for item in js:
@@ -3115,15 +3077,13 @@ class Bitstamp:
             count += 1
         print("获取数量", count)
         return result
-    
-    
-    
+
 class NetKLine:
     @classmethod
     def TS(cls, handler, code, start, end, freq):
         df = ts.pro_bar(ts_code=code, asset='I', start_date=start, end_date=end, freq=freq)
         df = df.sort_index(ascending=False)
-        
+
         return df
 
     @classmethod
@@ -3286,7 +3246,6 @@ class NetKLine:
                 print("重复获取")
         print(count)
         return handler, js
-
 
 def test(points=[3,2,5,3,7,4,7,2.5,5,4,8,6]):
     # 测试
