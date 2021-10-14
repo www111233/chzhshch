@@ -339,12 +339,30 @@ def binCandle(arr:List[RawCandle], freq:Freq):
     vol = sum([k.vol for k in arr])
     return RawCandle(symbol, dt, open, high, low, close, vol, freq)
 
+class Chan(object):
+    def __init__(self, symbol, level):
+        self.__level = level
+        self.__symbol = symbol
+    
+    @property
+    def LEVEL(self):
+        return self.__level
+    @property
+    def symbol(self):
+        return self.__symbol
+
+    def log(self, *args, **kwords):
+        if config.debug:
+            print("+", self.LEVEL, self.__class__.__name__, *args, **kwords)
+            return
+        config.logger.debug(self.__class__.__name__, *args, **kwords)
+        
 @enforce_types
-class ChanCandle:
+class ChanCandle(Chan):
     """缠论k线"""
-    __slots__ = ["symbol", "start", "end", "style", "index", "elements", "info"]
+    __slots__ = ["start", "end", "style", "index", "elements", "info"]
     def __init__(self, symbol: str, open: [float, int] = None, close: [float, int] = None, elements: List[RawCandle] = None, level=-1):
-        self.symbol = symbol
+        super(ChanCandle, self).__init__(symbol, -1)
         self.start = open
         self.end = close
         self.elements = elements
@@ -408,9 +426,10 @@ class ChanCandle:
                          "vol":self.vol, "style":self.style, "index":self.index, "dir":self.direction, "elements":self.elements}
 
 @enforce_types
-class ChanFenXing: # 分型
+class ChanFenXing(Chan): # 分型
     __slots__ = ["style", "fx", "elements"]
     def __init__(self, left:ChanCandle, mid:ChanCandle, right:ChanCandle):
+        super(ChanFenXing, self).__init__(mid.symbol, -2)
         self.style = tripleRelation(left, mid, right, False)
         if self.style == None:raise ChanException("無法解析分型")
         if not (left.dt < mid.dt < right.dt):
@@ -437,9 +456,7 @@ class ChanFenXing: # 分型
     @property
     def dt(self) -> datetime:
         return self.m.dt
-    @property
-    def symbol(self) -> str:
-        return self.m.symbol
+
     @property
     def power(self) -> str:
         if self.style is Shape.G:
@@ -466,11 +483,11 @@ class ChanFenXing: # 分型
         return self.elements[2]
 
 @enforce_types
-class ChanFeature:
-    __slots__ = ["__level", "__symbol", "__start", "__end", "elements", "index", "isFixed", "isVisual"]
+class ChanFeature(Chan):
+    __slots__ = ["__start", "__end", "elements", "index", "isFixed", "isVisual"]
     def __init__(self, start:ChanFenXing, end:ChanFenXing, elements:List[ChanCandle], level:int=0, index:int=0, isVisual:bool=False, isFixed:int=1):
         if start.symbol != end.symbol:raise ChanException
-        self.__symbol = start.symbol
+        super(ChanFeature, self).__init__(start.symbol, level)
 
         if not (start.dt < end.dt):
             raise ValueError("时序错误")
@@ -506,7 +523,7 @@ class ChanFeature:
         else:
             raise TypeError(doubleRelation(start, end), start.style, end.style)
 
-        self.__level = level # 0 为笔， 大于0，为段
+        #self.__level = level # 0 为笔， 大于0，为段
         self.__start = start
         self.__end = end
         self.elements = elements
@@ -533,9 +550,6 @@ class ChanFeature:
             if self.__start != self.elements[0].start:raise ValueError(5)
             if self.__end != self.elements[-1].end:raise ValueError(6)
 
-    @property
-    def LEVEL(self) -> int:
-        return self.__level
     @property
     def POWER(self) -> float:
         return self.HIGH - self.LOW
@@ -641,7 +655,7 @@ class ChanFeature:
     def HIGH(self) -> int:
         if self.high.style is Shape.S:
             return self.high.r.high
-        return self.high.fx
+        return self.high.m.high
 
     @property
     def low(self) -> ChanFenXing:
@@ -698,7 +712,7 @@ class ChanFeature:
     def LOW(self) -> int:
         if self.low.style is Shape.X:
             return self.low.r.low
-        return self.low.fx
+        return self.low.m.low
 
     @property
     def end(self) -> ChanFenXing:
@@ -748,10 +762,6 @@ class ChanFeature:
             raise TypeError(doubleRelation(start, end), start.style, end.style)
 
     @property
-    def symbol(self) -> str:
-        return self.__symbol
-
-    @property
     def mid(self) -> float:
         '''中间值'''
         return (self.HIGH + self.LOW) / 2
@@ -777,7 +787,7 @@ class ChanFeature:
                ((self.start, self.end, self.elements) == (other.start, other.end, other.elements))
 
     def toPillar(self) -> ChanCandle:
-        t = self.check()
+        t = self.check(sys._getframe().f_lineno)
         if t:
             raise ChanException(t, self)
         if self.direction is Direction.Up:
@@ -795,7 +805,7 @@ class ChanFeature:
             return True
         return False
 
-    def check(self) -> int:
+    def check(self, n) -> int:
         if not self.start:return 1
         if not self.end:return -1
         if not self.elements:return -2
@@ -810,11 +820,11 @@ class ChanFeature:
             low = min(self.elements, key=lambda x:x.low).low
             high = max(self.elements, key=lambda x:x.high).high
             if self.direction is Direction.Up:
-                if self.start.m.low != low:print(self.start.dt, "check 向上笔, 起点不是最低点")
-                if self.end.m.high != high:print(self.start.dt, "check 向上笔, 终点不是最高点")
+                if self.start.m.low != low:print(self.start.dt, "check 向上笔, 起点不是最低点", n)
+                if self.end.m.high != high:print(self.start.dt, "check 向上笔, 终点不是最高点", n)
             if self.direction is Direction.Down:
-                if self.start.m.high != high:print(self.start.dt, "check 向下笔, 起点不是最高点")
-                if self.end.m.low != low:print(self.start.dt, "check 向下笔, 终点不是最低点")
+                if self.start.m.high != high:print(self.start.dt, "check 向下笔, 起点不是最高点", n)
+                if self.end.m.low != low:print(self.start.dt, "check 向下笔, 终点不是最低点", n)
         else:
             if self.start != self.elements[0].start:return 5
             if self.end != self.elements[-1].end:return 6
@@ -883,16 +893,15 @@ def mergeFeature(l:ChanFeature, r:ChanFeature) -> ChanFeature:
         return feature
 
 @enforce_types
-class ChanZhongShu:
-    __slots__ = ["symbol", "elements", "ok", "__level", "__l", "__m", "__r"]
+class ChanZhongShu(Chan):
+    __slots__ = ["symbol", "elements", "__level", "__l", "__m", "__r"]
     def __init__(self, symbol:str, left:[ChanCandle, ChanFeature], mid:[ChanCandle, ChanFeature], right:[ChanCandle, ChanFeature], level:int=0):
         '''三根k线重叠区间为最小中枢
         '''
-        self.symbol = symbol
-        self.__level = level
-        if left.check():raise ChanException(left.check())
-        if mid.check():raise ChanException(mid.check())
-        if right.check():raise ChanException(right.check())
+        super(ChanZhongShu, self).__init__(symbol, level)
+        if left.check(sys._getframe().f_lineno):raise ChanException(left.check(sys._getframe().f_lineno))
+        if mid.check(sys._getframe().f_lineno):raise ChanException(mid.check(sys._getframe().f_lineno))
+        if right.check(sys._getframe().f_lineno):raise ChanException(right.check(sys._getframe().f_lineno))
         if not left.isNext(mid):raise ChanException(f"等级{level}, 无法通过连续性检测", left.end, mid.start)
         if not mid.isNext(right):raise ChanException(f"等级{level}, 无法通过连续性检测", mid.end, right.start)
 
@@ -900,10 +909,13 @@ class ChanZhongShu:
 
         self.elements = []
 
-        if doubleRelation(left.toPillar(), right.toPillar()) in (Direction.JumpUp, Direction.JumpDown):
-            self.ok = False
+    @property
+    def ok(self) -> bool:
+        if not self.r:return False
+        if doubleRelation(self.l.toPillar(), self.r.toPillar()) in (Direction.JumpUp, Direction.JumpDown):
+            return False
         else:
-            self.ok = True
+            return True
 
     @property
     def l(self) -> ChanFeature:
@@ -926,9 +938,6 @@ class ChanZhongShu:
         else:
             raise ChanException("未知中枢区间")
 
-    @property
-    def LEVEL(self) -> int:
-        return self.__level
     @property
     def status(self) -> bool:
         return self.DD < self.ZD < self.ZG < self.GG
@@ -979,12 +988,24 @@ class ChanZhongShu:
     def ZD(self) -> float:
         return max((self.l, self.m, self.r), key=lambda x:x.low.low).low.low
 
+    @property
+    def last(self):
+        if not self.elements:
+            return self.r
+        return self.elements[-1]
+    
     def __str__(self):
         return f"ChanZhongShu('{self.symbol}', {self.ZG}, {self.ZD}, {self.direction}, {len(self.elements)})"
 
     def __repr__(self):
         return f"ChanZhongShu('{self.symbol}', {self.ZG}, {self.ZD}, {self.direction}, {len(self.elements)})"
 
+    @enforce_types
+    def isLast(self, feature: [ChanCandle, ChanFeature]) -> bool:
+        if not self.elements:
+            return self.r == feature
+        return self.elements[-1] == feature
+        
     @enforce_types
     def isNext(self, feature: [ChanCandle, ChanFeature]) -> bool:
         if not self.elements:
@@ -1025,7 +1046,6 @@ class ChanZhongShu:
     @enforce_types
     def pop(self, feature: [ChanCandle, ChanFeature]) -> [ChanCandle, ChanFeature]:
         if not self.elements:
-            self.ok = False
             tz = self.__r
             self.__r = None
             return tz
@@ -1034,18 +1054,18 @@ class ChanZhongShu:
 
     @enforce_types
     def add(self, feature: [ChanCandle, ChanFeature]) -> int:
+        if not self.ok:
+            print("... 不是中枢 ...")
+            return 2
+
         if not feature:
             raise ValueError("无效特征序列")
         if not self.isNext(feature):
             print("ChanZhongShu 首尾 不呼应")
-            return 3
-
-        if not self.ok:
-            print("... 不是中枢 ...")
             return 1
 
         if not self.inInterval(feature):
-            return 4
+            return 3
         self.elements.append(feature)
         return 0
 
@@ -1149,6 +1169,280 @@ def tripleRelation(l:ChanCandle, m:ChanCandle, r:ChanCandle, isRight=False) -> S
                 return Shape.T # 喇叭口型
 
 
+class ZhongShuHandler(FeatureMachine):
+    def __init__(self, level:int=1):
+        super(ZhongShuHandler, self).__init__()
+        self.__level = level
+        self.zhshs = []
+        self.zsMachine = Machine([0,1,-1, 2,-2])
+        self.stack = Stack()
+        self.debug = 0
+        self.logging = None
+
+        self.features = []
+
+        deal = self._deal_left, self._deal_mid, self._deal_right
+        state = self.zsMachine.state
+        features = self._left, self._mid, self._right
+        self.stack.push((deal, state, features))
+
+    @property
+    def LEVEL(self):
+        return self.__level
+    @property
+    def state(self):
+        return {0: "混沌", 1: "阳", -1: "阴", 2:"太阳", -2:"太阴"}[self.zsMachine.state]
+
+    def log(self, *args, **kwords):
+        if self.debug:print("+", self.LEVEL, self.__class__.__name__, *args, **kwords)
+        if self.logging:
+            self.logging.debug(self.__class__.__name__, *args, **kwords)
+
+    @enforce_types
+    def append(self, feature: [ChanCandle, ChanFeature]):
+        t = feature.check(sys._getframe().f_lineno)
+        if t:raise ChanException("ZhongShuHandler append", t)
+
+        if self.features and (not self.features[-1].isNext(feature)):
+            raise ChanException("中枢， 首尾不呼应", self.features[-1], feature)
+
+        self.features.append(feature)
+
+        state = self.zsMachine.state
+        deal  = self._deal_left, self._deal_mid, self._deal_right
+
+        self.log("APPEND", self.state, len(self.zhshs), deal, feature)
+        while 1:
+            match self.zsMachine.state, (self._deal_left, self._deal_mid, self._deal_right):
+                case 0, (1,0,0):
+                    self.setLeft(feature, sys._getframe().f_lineno)
+                    self.setMid(None, sys._getframe().f_lineno)
+                    self.setRight(None, sys._getframe().f_lineno)
+                    deal = (0,1,0)
+                    state = 0
+                    break
+                case 0, (0,1,0):
+                    #self.setLeft(None, sys._getframe().f_lineno)
+                    self.setMid(feature, sys._getframe().f_lineno)
+                    self.setRight(None, sys._getframe().f_lineno)
+                    deal = (0,0,1)
+                    state = 0
+                    break
+                case 0, (0,0,1):
+                    #self.setLeft(None, sys._getframe().f_lineno)
+                    #self.setMid(None, sys._getframe().f_lineno)
+                    self.setRight(feature, sys._getframe().f_lineno)
+                    deal = (0,0,1)
+                    state = 0
+                    zs = ChanZhongShu(feature.symbol, self._left, self._mid, self._right, level=self.LEVEL)
+                    if zs.ok:
+                        if self.zhshs:
+                            relation = doubleRelation(self.zhshs[-1].interval, zs.interval)
+                            if relation is Direction.JumpUp:
+                                if zs.m.direction != Direction.Up:
+                                    self.setLeft(self._mid, sys._getframe().f_lineno)
+                                    self.setMid(self._right, sys._getframe().f_lineno)
+                                    self.setRight(None, sys._getframe().f_lineno)
+                                    break
+                                
+                            elif relation is Direction.JumpDown:
+                                if zs.m.direction != Direction.Down:
+                                    self.setLeft(self._mid, sys._getframe().f_lineno)
+                                    self.setMid(self._right, sys._getframe().f_lineno)
+                                    self.setRight(None, sys._getframe().f_lineno)
+                                    break
+                            else:
+                                self.setLeft(self._mid, sys._getframe().f_lineno)
+                                self.setMid(self._right, sys._getframe().f_lineno)
+                                self.setRight(None, sys._getframe().f_lineno)
+                                break
+                                raise Exception
+                        
+                        self.zhshs.append(zs)
+                        state = 1 if self._mid.direction is Direction.Up else -1
+                        deal = (0,0,1)
+                    else:
+                        self.setLeft(self._mid, sys._getframe().f_lineno)
+                        self.setMid(self._right, sys._getframe().f_lineno)
+                        self.setRight(None, sys._getframe().f_lineno)
+                        deal = (0,0,1)
+                    break
+                    
+                case 1, (0,0,1):
+                    zs = self.zhshs[-1]
+                    ok = zs.add(feature)
+
+                    if ok == 0:
+                        # 正常
+                        self.setLeft(self._mid, sys._getframe().f_lineno)
+                        self.setMid(self._right, sys._getframe().f_lineno)
+                        self.setRight(feature, sys._getframe().f_lineno)
+                        deal = (0,0,1)
+                        state = 1
+                        
+                    elif ok == 1:
+                        # 首尾不呼应
+                        raise Exception
+                        
+                    elif ok == 2:
+                        # 不是中枢
+                        raise Exception
+                        
+                    elif ok == 3:
+                        # 不在中枢区间
+                        self.setLeft(feature, sys._getframe().f_lineno)
+                        self.setMid(None, sys._getframe().f_lineno)
+                        self.setRight(None, sys._getframe().f_lineno)
+                        deal = (0,1,0)
+                        state = 2
+                        
+                    break
+                
+                case 2, (0,1,0):
+                    # 中枢 第三买卖点后的特殊处理。
+                    if not self._left.isNext(feature):
+                        raise ValueError
+                    self.setMid(feature, sys._getframe().f_lineno)
+                    self.setRight(None, sys._getframe().f_lineno)
+                    deal = (0,0,1)
+                    state = 0
+                    break
+                
+                case -1, (0,0,1):
+                    zs = self.zhshs[-1]
+                    ok = zs.add(feature)
+
+                    if ok == 0:
+                        # 正常
+                        self.setLeft(self._mid, sys._getframe().f_lineno)
+                        self.setMid(self._right, sys._getframe().f_lineno)
+                        self.setRight(feature, sys._getframe().f_lineno)
+                        deal = (0,0,1)
+                        state = -1
+                        
+                    elif ok == 1:
+                        # 首尾不呼应
+                        raise Exception
+                        
+                    elif ok == 2:
+                        # 不是中枢
+                        raise Exception
+                        
+                    elif ok == 3:
+                        # 不在中枢区间
+                        self.setLeft(feature, sys._getframe().f_lineno)
+                        self.setMid(None, sys._getframe().f_lineno)
+                        self.setRight(None, sys._getframe().f_lineno)
+                        deal = (0,1,0)
+                        state = -2
+                    break
+                case -2, (0,1,0):
+                    # 中枢 第三买卖点后的特殊处理。
+                    if not self._left.isNext(feature):
+                        raise ValueError
+                    self.setMid(feature, sys._getframe().f_lineno)
+                    self.setRight(None, sys._getframe().f_lineno)
+                    deal = (0,0,1)
+                    state = 0
+                    break
+                
+                case _:
+                    raise ChanException(self.zsMachine.state, (self._deal_left, self._deal_mid, self._deal_right))
+            break
+            
+        self.zsMachine.state = state
+        self._deal_left, self._deal_mid, self._deal_right = deal
+        self.log()
+
+    @enforce_types
+    def pop(self, tz: [ChanCandle, ChanFeature], n):
+        state = self.zsMachine.state
+        deal  = self._deal_left, self._deal_mid, self._deal_right
+
+        t = None
+        self.log(colored("POP", "red"), self.state, self.LEVEL, deal, tz)
+        while 1:
+            match self.zsMachine.state, (self._deal_left, self._deal_mid, self._deal_right):
+                case 0, (1,0,0):
+                    self.setLeft(None, sys._getframe().f_lineno)
+                    self.setMid(None, sys._getframe().f_lineno)
+                    self.setRight(None, sys._getframe().f_lineno)
+                    #deal = (0,1,0)
+                    #state = 0
+                    break
+                case 0, (0,1,0):
+                    #self.setLeft(None, sys._getframe().f_lineno)
+                    self.setMid(None, sys._getframe().f_lineno)
+                    self.setRight(None, sys._getframe().f_lineno)
+                    deal = (1,0,0)
+                    state = 0
+                    break
+                case 0, (0,0,1):
+                    #self.setLeft(None, sys._getframe().f_lineno)
+                    #self.setMid(None, sys._getframe().f_lineno)
+                    self.setRight(None, sys._getframe().f_lineno)
+                    deal = (0,1,0)
+                    state = 0
+                    
+                case 1, (0,0,1):
+                    zs = self.zhshs.pop()
+                    t = zs.pop(tz)
+                    ok = zs.ok
+
+                    if ok:
+                        self.zhshs.append(zs)
+                        self.setRight(None, sys._getframe().f_lineno)
+                        deal = (0,0,1)
+                    else:
+                        self.setLeft(zs.l, sys._getframe().f_lineno)
+                        self.setMid(zs.m, sys._getframe().f_lineno)
+                        self.setRight(None, sys._getframe().f_lineno)
+                        deal = (0,0,1)
+                        state = 0
+                    break
+                case 2, (0,1,0):
+                    self.setLeft(None, sys._getframe().f_lineno)
+                    self.setMid(None, sys._getframe().f_lineno)
+                    self.setRight(None, sys._getframe().f_lineno)
+                    deal = (0,0,1)
+                    state = 1
+                    break
+                
+                case -1, (0,0,1):
+                    zs = self.zhshs.pop()
+                    t = zs.pop(tz)
+                    ok = zs.ok
+
+                    if ok:
+                        self.zhshs.append(zs)
+                        self.setRight(None, sys._getframe().f_lineno)
+                        deal = (0,0,1)
+                    else:
+                        self.setLeft(zs.l, sys._getframe().f_lineno)
+                        self.setMid(zs.m, sys._getframe().f_lineno)
+                        self.setRight(None, sys._getframe().f_lineno)
+                        deal = (0,0,1)
+                        state = 0
+                    break
+                case -2, (0,1,0):
+                    self.setLeft(None, sys._getframe().f_lineno)
+                    self.setMid(None, sys._getframe().f_lineno)
+                    self.setRight(None, sys._getframe().f_lineno)
+                    deal = (0,0,1)
+                    state = -1
+                    break
+                    
+                case _:
+                    raise ChanException(self.zsMachine.state, (self._deal_left, self._deal_mid, self._deal_right))
+            break
+
+        self.zsMachine.state = state
+        self._deal_left, self._deal_mid, self._deal_right = deal
+        self.features.pop()
+        self.log()
+        return t
+
+
 @enforce_types
 def removeInclude(ck:ChanCandle, raw:RawCandle, direction:Direction) -> ChanCandle:
     elements = ck.elements
@@ -1190,7 +1484,7 @@ class KlineHandler:
         if len(self.klines) >= 2:
             return self.klines[1].dt - self.klines[0].dt
         else:
-            ...#self.__times.append(k.dt)
+            ...
 
     def calcBOLL(self, timeperiod=20, std=2):
         # https://blog.csdn.net/qq_41437512/article/details/105473845
@@ -1332,6 +1626,7 @@ class KlineHandler:
             hasReplaced = True
             self.cklines[-1] = ck
         return hasReplaced, ck
+
 
 class FenXingHandler(FeatureMachine):
     ''' 分型处理 '''
@@ -1614,7 +1909,7 @@ class BiHandler:
         return 0
     @property
     def state(self):
-        return {0:"混沌", 1:"少阳", 2:"老阳", -1:"少阴", -2:"老阴"} [self.biMachine.state]
+        return {0:"混沌", 1:"少陽", 2:"太陽", -1:"少陰", -2:"老陰"} [self.biMachine.state]
 
     def checkSegments(self):
         """ 检测每笔 是否有BUG """
@@ -1665,7 +1960,7 @@ class BiHandler:
                     if not self.features[-2].isNext(self.features[-1]):
                         raise ValueError("append 无法衔接")
 
-                assert not bi.check()
+                assert not bi.check(sys._getframe().f_lineno)
                 self.features.append(bi)
                 self.features[-1].index = len(self.features)
                 self.hasUpdated = True
@@ -1817,7 +2112,7 @@ class BiHandler:
 
                 case 1, Shape.G: # 少阳
                     if ps >= 2:
-                        if fx.m is self.getHigh(self.points[-1].m, fx.r):
+                        if fx.m is self.getHigh(self.points[-2].m, fx.r):
                             self.T = fx
                             info ="1G"
 
@@ -1853,7 +2148,7 @@ class BiHandler:
 
                 case 2, Shape.D: # 太阳
                     if ps >= 2:
-                        if fx.m is self.getLow(self.points[-1].m, fx.r):
+                        if fx.m is self.getLow(self.points[-2].m, fx.r):
                             self.B = fx
                             info = "2D"
 
@@ -1895,7 +2190,18 @@ class BiHandler:
                         # 是否满足下一状态的条件 1 → 2 → -1 → -2 → 1
                         if fx.r.high > self.points[-1].high:
                             self.__pop_bi(sys._getframe().f_lineno)
-                            state = 1
+                            # 人工修正
+                            tmp = self.B
+                            if tmp and self.points[-1].m.dt < tmp.m.dt and tmp.m.low < self.points[-1].m.low:
+                                self.__replace_bi(tmp, sys._getframe().f_lineno)
+                                bi = self.cklines[self.points[-1].m.index:fx.m.index+1]
+                                if len(bi) >= 5:
+                                    state = 1
+                                else:
+                                    state = -2
+                                info = "修正2S"
+                            else:
+                                state = 1
                         else:
                             state = -1
                     else:
@@ -1924,7 +2230,7 @@ class BiHandler:
 
                 case -1, Shape.D: # 少阴
                     if ps >= 2:
-                        if fx.m is self.getLow(self.points[-1].m, fx.r):
+                        if fx.m is self.getLow(self.points[-2].m, fx.r):
                             self.B = fx
                             info = "-1D"
 
@@ -1979,8 +2285,18 @@ class BiHandler:
                         # 是否满足下一状态的条件 1 → 2 → -1 → -2 → 1
                         if fx.r.low < self.points[-1].low:
                             self.__pop_bi(sys._getframe().f_lineno)
-                            state = -1
-                            self.log(colored("转换状态, 太阴至少阴", "red"))
+                            # 人工修正
+                            tmp = self.T
+                            if tmp and self.points[-1].m.dt < tmp.m.dt and tmp.m.high > self.points[-1].m.high:
+                                self.__replace_bi(tmp, sys._getframe().f_lineno)
+                                bi = self.cklines[self.points[-1].m.index:fx.m.index+1]
+                                if len(bi) >= 5:
+                                    state = -1
+                                else:
+                                    state = 2
+                                info = "修正-2X"
+                            else:
+                                state = -1
                         else:
                             state = 1
                     else:
@@ -2014,7 +2330,7 @@ class BiHandler:
 
                 case -2, Shape.G: # 太阴
                     if ps >= 2:
-                        if fx.m is self.getHigh(self.points[-1].m, fx.r):
+                        if fx.m is self.getHigh(self.points[-2].m, fx.r):
                             self.T = fx
                             info = "-2G"
 
@@ -2053,222 +2369,14 @@ class BiHandler:
             break
 
         self.biMachine.state = state
-        fx.m.info = info + "::" + self.state
+        fx.m.info = info + ":" + self.state
         fx.r.info = self.state
 
         if self.stateStack.gettop() != state:
             self.stateStack.push(self.biMachine.state)
         self.log()
 
-@enforce_types
-class ZhongShuHandler(FeatureMachine):
-    def __init__(self, level:int=1):
-        super(ZhongShuHandler, self).__init__()
-        self.__level = level
-        self.zhshs = []
-        self.zsMachine = Machine([0,1,-1])
-        self.stack = Stack()
-        self.logging = None
 
-        self.features = []
-
-        deal = self._deal_left, self._deal_mid, self._deal_right
-        state = self.zsMachine.state
-        features = self._left, self._mid, self._right
-        self.stack.push((deal, state, features))
-
-    @property
-    def LEVEL(self):
-        return self.__level
-    @property
-    def state(self):
-        return {0: "人", 1: "天", -1: "地"}[self.zsMachine.state]
-
-    def log(self, *args, **kwords):
-        if config.debug:
-            print("+", self.LEVEL, self.__class__.__name__, *args, **kwords)
-            return
-        if config.debug:
-            config.logger.debug(self.__class__.__name__, *args, **kwords)
-
-    @enforce_types
-    def append(self, feature: [ChanCandle, ChanFeature], direction=Direction.Unknow):
-        t = feature.check()
-        if t:raise ChanException("ZhongShuHandler append", t)
-
-        if self.features and (not self.features[-1].isNext(feature)):
-            raise ChanException("中枢， 首尾不呼应", self.features[-1], feature)
-
-        self.features.append(feature)
-
-        state = self.zsMachine.state
-        deal  = self._deal_left, self._deal_mid, self._deal_right
-
-        self.log("APPEND", self.state, len(self.zhshs), deal, feature)
-        while 1:
-            if self.zsMachine.state == 0:
-                # 准备形成中枢
-                if self._deal_left:
-                    self.setLeft(feature, sys._getframe().f_lineno)
-                    deal = (0,1,0)
-
-                elif self._deal_mid:
-                    self.setMid(feature, sys._getframe().f_lineno)
-                    deal = (0,0,1)
-                    if self._left.check():
-                        raise ChanException("")
-                    if not self._left.isNext(feature):
-                        raise Exception("不连续 1")
-
-                elif self._deal_right:
-                    self.setRight(feature, sys._getframe().f_lineno)
-                    deal = (0,0,1)
-                    if self._mid.check():
-                        raise ChanException("")
-                    if not self._mid.isNext(feature):
-                        raise Exception("不连续 2")
-
-                    zs = ChanZhongShu(feature.symbol, self._left, self._mid, self._right, feature.LEVEL)
-                    if zs.ok:
-                        if self._left.direction is Direction.Up:
-                            state = -1 # 上下上 下跌中枢
-                        elif self._left.direction is Direction.Down:
-                            state = 1  # 上下上 上涨中枢
-                        else:
-                            raise Exception
-                        self.zhshs.append(zs)
-                    else:
-                        self.setLeft(self._mid, sys._getframe().f_lineno)
-                        self.setMid(self._right, sys._getframe().f_lineno)
-                        self.setRight(None, sys._getframe().f_lineno)
-
-                else:
-                    raise Exception
-
-            elif self.zsMachine.state in (1, -1):
-                # 形成 (下上下 上涨中枢, 上下上 下跌中枢)
-                zs = self.zhshs[-1]
-                t = zs.add(feature)
-                if t:
-                    deal = (0,1,0)
-                    state = 0
-                    self.setLeft(feature, sys._getframe().f_lineno)
-
-                    if self.zsMachine.state == 1:
-                        name = "上涨"
-                    elif self.zsMachine.state == -1:
-                        name = "下跌"
-                    else:
-                        raise Exception(self.state)
-
-                    ## 信号 ##
-                    relation = doubleRelation(zs.interval, feature.toPillar())
-
-                    if relation is Direction.JumpUp:
-                        print("ZhongShuHandler", zs.LEVEL, f"向上突破 {name}中枢 形成 盘整三买")
-                        k = min(feature.low.m.elements, key=lambda x:x.low)
-                        #k.mark.update({feature.LEVEL: f"向上突破 {name}中枢 形成 盘整三买"})
-
-                    elif relation is Direction.JumpDown:
-                        print("ZhongShuHandler", zs.LEVEL, f"向下突破 {name}中枢 形成 盘整三卖")
-                        k = max(feature.low.m.elements, key=lambda x:x.high)
-                        #k.mark.update({feature.LEVEL: f"向下突破 {name}中枢 形成 盘整三卖"})
-                    #else:
-                    #    raise Exception(t, relation)
-
-                    self.log("中枢跳出")
-                    break
-
-                if self._deal_right:
-                    self.setLeft (self._mid, sys._getframe().f_lineno)
-                    self.setMid(self._right, sys._getframe().f_lineno)
-                    self.setRight  (feature, sys._getframe().f_lineno)
-                    self.log("中枢继续")
-                else:
-                    raise Exception
-
-            else:
-                raise Exception
-
-            break
-
-        self.zsMachine.state = state
-        self._deal_left, self._deal_mid, self._deal_right = deal
-        self.log()
-
-    @enforce_types
-    def pop(self, tz: [ChanCandle, ChanFeature], n):
-        state = self.zsMachine.state
-        deal  = self._deal_left, self._deal_mid, self._deal_right
-
-        t = None
-        self.log(colored("POP", "red"), self.state, self.LEVEL, deal, tz)
-        while 1:
-            if self.zsMachine.state == 0:
-                # 准备形成中枢
-                if self._deal_left:
-                    #if self.features:
-                    #    t = self.features[-1]
-
-                    self.setLeft(None, sys._getframe().f_lineno)
-                    self.setMid(None, sys._getframe().f_lineno)
-                    self.setRight(None, sys._getframe().f_lineno)
-                    deal = (1,0,0)
-
-                elif self._deal_mid:
-                    t = self._left
-                    self.setLeft(None, sys._getframe().f_lineno)
-                    self.setMid(None, sys._getframe().f_lineno)
-                    self.setRight(None, sys._getframe().f_lineno)
-                    deal = (1,0,0)
-
-                elif self._deal_right:
-                    t = self._mid
-                    #self.setLeft(None, sys._getframe().f_lineno)
-                    self.setMid(None, sys._getframe().f_lineno)
-                    self.setRight(None, sys._getframe().f_lineno)
-                    deal = (0,1,0)
-                    if self._left.check():
-                        raise ChanException("")
-
-                else:
-                    raise Exception("deal", self._deal_left, self._deal_mid, self._deal_right)
-                break
-
-            elif self.zsMachine.state in (1, -1):
-                # 处于中枢状态 (下上下 上涨中枢, 上下上 下跌中枢)
-                zs = self.zhshs[-1]
-                t = zs.pop(tz)
-                if not zs.ok:
-                    self.zhshs.pop()
-                    if self._deal_right:
-                        self.setLeft(zs.l, sys._getframe().f_lineno)
-                        self.setMid(zs.m, sys._getframe().f_lineno)
-                        self.setRight(None, sys._getframe().f_lineno)
-                        deal = (0,0,1)
-                        state = 0
-                    else:
-                        raise Exception
-                    break
-
-            else:
-                raise Exception
-
-            break
-
-        self.zsMachine.state = state
-        self._deal_left, self._deal_mid, self._deal_right = deal
-        '''
-        if not t:
-            raise ValueError(self.LEVEL, "中枢处理没有数据, feature size:", len(self.features))
-        if tz != t:
-            raise ChanException(tz, t)
-        '''
-        self.features.pop()
-        self.log()
-        return t
-
-@enforce_types
 class FeatureHandler(FeatureMachine):
     ''' 线段处理 '''
     __slots__ = ["visual", "last", "stack", "__level", "zsh", "featureMachine", "features", "segments", "points", "lastFeature", "lastMerge", "isVisual"]
@@ -2278,7 +2386,6 @@ class FeatureHandler(FeatureMachine):
         self.features = []
         self.segments = []
         self.points = []
-        segment = None
         self.lastMerge = None
         self.logging = None
 
