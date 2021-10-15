@@ -62,44 +62,10 @@ def enforce_types(callable):
 
     return decorate(callable)
 
-class Config:
-    def __init__(self):
-        self.__debug = 0
-        logger = logging.getLogger('chzhshch')
-        logger.setLevel(logging.DEBUG)
-        
-        rf_handler = logging.handlers.TimedRotatingFileHandler('all.log', when='midnight', interval=1, backupCount=7, atTime=_datetime.time(0, 0, 0, 0))
-        rf_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-
-        f_handler = logging.FileHandler('chzhshch-error.log')
-        f_handler.setLevel(logging.WARN)
-        f_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(filename)s[:%(lineno)d] - %(message)s"))
-        
-        logger.addHandler(rf_handler)
-        logger.addHandler(f_handler)
-        self.logger = logger
-        self.simple = False
-    
-    @property
-    def debug(self):
-        return self.__debug
-        
-    @debug.setter
-    def debug(self, n):
-        self.__debug = n
-        if n:
-            self.logger.setLevel(logging.DEBUG)
-        else:
-            self.logger.setLevel(logging.INFO)
-        
-
-config = Config()
-config. debug = 0
-
 class Logging(object):
-    def __init__(self, name, level=0):
+    def __init__(self, name, fp=sys.stderr, level=0):
         self.level = level
-        self.outstream = sys.stderr
+        self.fp = fp
         self.name = name
 
     def __print(self, *args, **kwords):
@@ -114,15 +80,34 @@ class Logging(object):
                     string = string.replace(f, '')
             args[i] = string
         builtins.print(now, *args, **kwords)
-        self.outstream.flush()
+        self.fp.flush()
 
     def debug(self, *args):
         if self.level >= 0:
-            self.__print(self.level, *args, file=self.outstream)
+            self.__print(self.level, *args, file=self.fp)
 
     def info(self, *args):
         if self.level >= 1:
-            self.__print(self.level, *args, file=self.outstream)
+            self.__print(self.level, *args, file=self.fp)
+
+class Config:
+    def __init__(self):
+        self.__debug = 0
+        self.logger = Logging("chzhshch")
+        self.simple = False
+    
+    @property
+    def debug(self):
+        return self.__debug
+        
+    @debug.setter
+    def debug(self, n):
+        self.__debug = n
+        self.logger.level = n
+        
+
+config = Config()
+config. debug = 0
 
 def print(*args, **kwords):
     result = []
@@ -266,11 +251,11 @@ class BaseHandler(object):
     def LEVEL(self):
         return self.__level
     
-    def log(self, *args, **kwords):
+    def log(self, *args):
         if config.debug:
-            print("+", self.LEVEL, self.__class__.__name__, *args, **kwords)
+            print("+", self.LEVEL, self.__class__.__name__, *args)
             return
-        config.logger.debug("+", self.LEVEL, self.__class__.__name__, *args, **kwords)
+        #config.logger.debug("+", self.LEVEL, self.__class__.__name__, *args)
 
 class Chan(object):
     def __init__(self, symbol, level):
@@ -320,6 +305,9 @@ class RawCandle(object):
         self.J = 50
         self.mark = dict()
 
+    @property
+    def ampl(self) -> float:
+        return (self.open - self.close)/ self.open
     @classmethod
     def frombytes(cls, buf:bytes, symbol:str):
         timestamp, open, high, low, close, vol = struct.unpack(">6d", buf)
@@ -376,6 +364,10 @@ class ChanCandle(Chan):
     def __repr__(self):
         return f'ChanCandle("{self.symbol}", {self.dt}, {self.start}, {self.end}, {self.style}, {self.direction}, size={len(self.elements)})'
 
+    @property
+    def ampl(self) -> float:
+        return (self.start - self.end) / self.start
+    
     @property
     def dt(self) -> datetime:
         if not self.elements:
@@ -549,6 +541,12 @@ class ChanFeature(Chan):
             if self.__start != self.elements[0].start:raise ValueError(5)
             if self.__end != self.elements[-1].end:raise ValueError(6)
 
+    @property
+    def ampl(self) -> float:
+        if self.direction is Direction.Down:
+            return round((self.end.low - self.start.high) / self.start.high, 6)
+        if self.direction is Direction.Up:
+            return round((self.end.high - self.start.low) / self.start.low, 6)
     @property
     def POWER(self) -> float:
         return self.HIGH - self.LOW
@@ -1174,10 +1172,10 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
         BaseHandler.__init__(self, level)
         self.zhshs = []
         self.zsMachine = Machine([0,1,-1, 2,-2])
-        self.stack = Stack()
 
         self.features = []
 
+        self.stack = Stack()
         deal = self._deal_left, self._deal_mid, self._deal_right
         state = self.zsMachine.state
         features = self._left, self._mid, self._right
@@ -1200,7 +1198,7 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
         state = self.zsMachine.state
         deal  = self._deal_left, self._deal_mid, self._deal_right
 
-        self.log("APPEND", self.state, len(self.zhshs), deal, feature)
+        self.log("APPEND start", self.state, len(self.zhshs), deal, feature)
         while 1:
             match self.zsMachine.state, (self._deal_left, self._deal_mid, self._deal_right):
                 case 0, (1,0,0):
@@ -1209,6 +1207,7 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                     self.setRight(None, sys._getframe().f_lineno)
                     deal = (0,1,0)
                     state = 0
+                    self.log(1)
                     break
                 case 0, (0,1,0):
                     #self.setLeft(None, sys._getframe().f_lineno)
@@ -1216,6 +1215,7 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                     self.setRight(None, sys._getframe().f_lineno)
                     deal = (0,0,1)
                     state = 0
+                    self.log(2)
                     break
                 case 0, (0,0,1):
                     #self.setLeft(None, sys._getframe().f_lineno)
@@ -1232,6 +1232,7 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                                     self.setLeft(self._mid, sys._getframe().f_lineno)
                                     self.setMid(self._right, sys._getframe().f_lineno)
                                     self.setRight(None, sys._getframe().f_lineno)
+                                    self.log(3)
                                     break
                                 
                             elif relation is Direction.JumpDown:
@@ -1239,22 +1240,27 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                                     self.setLeft(self._mid, sys._getframe().f_lineno)
                                     self.setMid(self._right, sys._getframe().f_lineno)
                                     self.setRight(None, sys._getframe().f_lineno)
+                                    self.log(4)
                                     break
                             else:
                                 self.setLeft(self._mid, sys._getframe().f_lineno)
                                 self.setMid(self._right, sys._getframe().f_lineno)
                                 self.setRight(None, sys._getframe().f_lineno)
+                                self.log(5)
                                 break
                                 raise Exception
                         
                         self.zhshs.append(zs)
                         state = 1 if self._mid.direction is Direction.Up else -1
                         deal = (0,0,1)
+                        self.log(6)
                     else:
+                        t = self._left
                         self.setLeft(self._mid, sys._getframe().f_lineno)
                         self.setMid(self._right, sys._getframe().f_lineno)
-                        self.setRight(None, sys._getframe().f_lineno)
+                        self.setRight(t, sys._getframe().f_lineno)
                         deal = (0,0,1)
+                        self.log(7)
                     break
                     
                 case 1, (0,0,1):
@@ -1268,6 +1274,7 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                         self.setRight(feature, sys._getframe().f_lineno)
                         deal = (0,0,1)
                         state = 1
+                        self.log(23)
                         
                     elif ok == 1:
                         # 首尾不呼应
@@ -1284,6 +1291,7 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                         self.setRight(None, sys._getframe().f_lineno)
                         deal = (0,1,0)
                         state = 2
+                        self.log(8, "跳出中枢")
                         
                     break
                 
@@ -1295,6 +1303,7 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                     self.setRight(None, sys._getframe().f_lineno)
                     deal = (0,0,1)
                     state = 0
+                    self.log(9)
                     break
                 
                 case -1, (0,0,1):
@@ -1308,6 +1317,7 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                         self.setRight(feature, sys._getframe().f_lineno)
                         deal = (0,0,1)
                         state = -1
+                        self.log(10)
                         
                     elif ok == 1:
                         # 首尾不呼应
@@ -1324,6 +1334,7 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                         self.setRight(None, sys._getframe().f_lineno)
                         deal = (0,1,0)
                         state = -2
+                        self.log(11, "跳出中枢")
                     break
                 case -2, (0,1,0):
                     # 中枢 第三买卖点后的特殊处理。
@@ -1333,6 +1344,7 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                     self.setRight(None, sys._getframe().f_lineno)
                     deal = (0,0,1)
                     state = 0
+                    self.log(12)
                     break
                 
                 case _:
@@ -1341,15 +1353,20 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
             
         self.zsMachine.state = state
         self._deal_left, self._deal_mid, self._deal_right = deal
+        
+        features = self._left, self._mid, self._right
+        self.stack.push((deal, state, features))
+        self.log("APPEND end", self.state, len(self.zhshs), deal)
         self.log()
 
     @enforce_types
     def pop(self, tz: [ChanCandle, ChanFeature], n):
+        t = None
+        
         state = self.zsMachine.state
         deal  = self._deal_left, self._deal_mid, self._deal_right
 
-        t = None
-        self.log(colored("POP", "red"), self.state, self.LEVEL, deal, tz)
+        self.log(colored("POP start", "red"), self.state, self.LEVEL, deal, tz)
         while 1:
             match self.zsMachine.state, (self._deal_left, self._deal_mid, self._deal_right):
                 case 0, (1,0,0):
@@ -1358,6 +1375,7 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                     self.setRight(None, sys._getframe().f_lineno)
                     #deal = (0,1,0)
                     #state = 0
+                    self.log(13)
                     break
                 case 0, (0,1,0):
                     #self.setLeft(None, sys._getframe().f_lineno)
@@ -1365,13 +1383,25 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                     self.setRight(None, sys._getframe().f_lineno)
                     deal = (1,0,0)
                     state = 0
+                    self.log(14)
                     break
                 case 0, (0,0,1):
                     #self.setLeft(None, sys._getframe().f_lineno)
                     #self.setMid(None, sys._getframe().f_lineno)
+                    if self._right:
+                        if self._right.isNext(self._left):
+                            t = self._right
+                            self.setRight(None, sys._getframe().f_lineno)
+                            self.setMid(self._left, sys._getframe().f_lineno)
+                            self.setLeft(t, sys._getframe().f_lineno)
+                            deal = (0,0,1)
+                            self.log(22)
+                            break
                     self.setRight(None, sys._getframe().f_lineno)
                     deal = (0,1,0)
                     state = 0
+                    self.log(15)
+                    break
                     
                 case 1, (0,0,1):
                     zs = self.zhshs.pop()
@@ -1382,12 +1412,14 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                         self.zhshs.append(zs)
                         self.setRight(None, sys._getframe().f_lineno)
                         deal = (0,0,1)
+                        self.log(16)
                     else:
                         self.setLeft(zs.l, sys._getframe().f_lineno)
                         self.setMid(zs.m, sys._getframe().f_lineno)
                         self.setRight(None, sys._getframe().f_lineno)
                         deal = (0,0,1)
                         state = 0
+                        self.log(17)
                     break
                 case 2, (0,1,0):
                     self.setLeft(None, sys._getframe().f_lineno)
@@ -1395,6 +1427,7 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                     self.setRight(None, sys._getframe().f_lineno)
                     deal = (0,0,1)
                     state = 1
+                    self.log(18)
                     break
                 
                 case -1, (0,0,1):
@@ -1406,12 +1439,14 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                         self.zhshs.append(zs)
                         self.setRight(None, sys._getframe().f_lineno)
                         deal = (0,0,1)
+                        self.log(19)
                     else:
                         self.setLeft(zs.l, sys._getframe().f_lineno)
                         self.setMid(zs.m, sys._getframe().f_lineno)
                         self.setRight(None, sys._getframe().f_lineno)
                         deal = (0,0,1)
                         state = 0
+                        self.log(20)
                     break
                 case -2, (0,1,0):
                     self.setLeft(None, sys._getframe().f_lineno)
@@ -1419,6 +1454,7 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
                     self.setRight(None, sys._getframe().f_lineno)
                     deal = (0,0,1)
                     state = -1
+                    self.log(21)
                     break
                     
                 case _:
@@ -1428,6 +1464,7 @@ class ZhongShuHandler(FeatureMachine, BaseHandler):
         self.zsMachine.state = state
         self._deal_left, self._deal_mid, self._deal_right = deal
         self.features.pop()
+        self.log(colored("POP end", "red"), self.state, self.LEVEL, deal)
         self.log()
         return t
 
@@ -1505,7 +1542,6 @@ class KlineHandler:
             #print(self.klines[-timeperiod:])
             n = 1
             print(colored("float division by zero", "red"))
-            config.logger.warning("float division by zero")
         rsv = ((last.close-l) / n) * 100
         last.K = a*second.K + b*rsv
         last.D = a*second.D + b*last.K
@@ -2120,18 +2156,6 @@ class BiHandler(BaseHandler):
                         if fx.m is self.getHigh(self.points[-2].m, fx.r):
                             self.T = fx
                             info ="1G"
-                            # 无脑修正， 不符合笔规则
-                            high = fx.m.high
-                            low = self.points[-2].m.low
-                            v = (high - low) / low
-                            print(v)
-                            if v >= 0.02:
-                                self.__append_bi(fx, sys._getframe().f_lineno)
-                                info = "振幅1G"
-                                state = 2
-                                print(info)
-                                break
-                            # 无 脑 结 束
 
                     relation = doubleRelation(self.points[-1].m, fx.m)
                     if relation in (Direction.Up, Direction.JumpUp):
@@ -2139,7 +2163,17 @@ class BiHandler(BaseHandler):
                         bi = self.cklines[self.points[-1].m.index:fx.m.index+1]
                         if bi[0] != self.points[-1].m or bi[-1] != fx.m:raise Exception
                         if len(bi) < 5:
-                            #print("1G 不满足笔添加")
+                            if fx is self.T:
+                                # 无脑修正， 不符合笔规则
+                                tz = ChanFeature(self.points[-1], fx, [self.points[-1].m, fx.m], level=0)
+                                ampl = tz.ampl
+                                if ampl >= 0.02:
+                                    self.__append_bi(fx, sys._getframe().f_lineno)
+                                    info = "振幅1G"
+                                    state = 2
+                                    print(info, ampl)
+                                    break
+                                # 无 脑 结 束
                             break
                         if force:
                             self.__append_bi(fx, sys._getframe().f_lineno)
@@ -2169,15 +2203,13 @@ class BiHandler(BaseHandler):
                             self.B = fx
                             info = "2D"
                             # 无脑修正， 不符合笔规则
-                            low = fx.m.low
-                            high = self.points[-2].m.high
-                            v = (high - low) / high
-                            print(v)
-                            if v >= 0.02:
+                            tz = ChanFeature(self.points[-1], fx, [self.points[-1].m, fx.m], level=0)
+                            ampl = tz.ampl
+                            if abs(ampl) >= 0.02:
                                 self.__append_bi(fx, sys._getframe().f_lineno)
                                 info = "振幅2D"
                                 state = -2
-                                print(info)
+                                print(info, ampl)
                                 break
                             # 无 脑 结 束
 
@@ -2262,18 +2294,6 @@ class BiHandler(BaseHandler):
                         if fx.m is self.getLow(self.points[-2].m, fx.r):
                             self.B = fx
                             info = "-1D"
-                            # 无脑修正， 不符合笔规则
-                            low = fx.m.low
-                            high = self.points[-2].m.high
-                            v = (high - low) / high
-                            print(v)
-                            if v >= 0.02:
-                                self.__append_bi(fx, sys._getframe().f_lineno)
-                                info = "振幅-1D"
-                                state = -2
-                                print(info)
-                                break
-                            # 无 脑 结 束
 
                     relation = doubleRelation(self.points[-1].m, fx.m)
                     if relation in (Direction.Down, Direction.JumpDown):
@@ -2281,7 +2301,17 @@ class BiHandler(BaseHandler):
                         bi = self.cklines[self.points[-1].m.index:fx.m.index+1]
                         if bi[0] != self.points[-1].m or bi[-1] != fx.m:raise Exception
                         if len(bi) < 5:
-                            #print("-1D 不满足笔添加")
+                            if fx is self.B:
+                                # 无脑修正， 不符合笔规则
+                                tz = ChanFeature(self.points[-1], fx, [self.points[-1].m, fx.m], level=0)
+                                ampl = tz.ampl
+                                if abs(ampl) >= 0.02:
+                                    self.__append_bi(fx, sys._getframe().f_lineno)
+                                    info = "振幅-1D"
+                                    state = -2
+                                    print(info, ampl)
+                                    break
+                                # 无 脑 结 束
                             break
                         if force:
                             self.__append_bi(fx, sys._getframe().f_lineno)
@@ -2389,15 +2419,13 @@ class BiHandler(BaseHandler):
                             info = "-2G"
                             
                             # 无脑修正， 不符合笔规则
-                            high = fx.m.high
-                            low = self.points[-2].m.low
-                            v = (high - low) / low
-                            print(v)
-                            if v >= 0.02:
+                            tz = ChanFeature(self.points[-1], fx, [self.points[-1].m, fx.m], level=0)
+                            ampl = tz.ampl
+                            if ampl >= 0.02:
                                 self.__append_bi(fx, sys._getframe().f_lineno)
                                 info = "振幅-2G"
                                 state = 2
-                                print(info)
+                                print(info, ampl)
                                 break
                             # 无 脑 结 束
                             
@@ -3484,5 +3512,20 @@ def test2():
         print(i)
         czsc.toCharts()
 
+def test3(czsc, start=None, end=None, fp=sys.stderr):
+    t = time.time()
+    i = 0
+    config.logger.fp=fp
+    obj = ChZhShCh()
+    for k in czsc.klines:
+        if start:
+            if k.dt < start:continue
+        obj.add(k.transform(RawCandle))
+        i += 1
+        if end:
+            if k.dt > end:break
+    print(i, "用时", time.time()-t)
+    return obj
+    
 if __name__ == '__main__':
     test()
