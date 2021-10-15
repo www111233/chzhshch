@@ -78,6 +78,7 @@ class Config:
         logger.addHandler(rf_handler)
         logger.addHandler(f_handler)
         self.logger = logger
+        self.simple = False
     
     @property
     def debug(self):
@@ -94,10 +95,6 @@ class Config:
 
 config = Config()
 config. debug = 0
-
-
-
-
 
 class Logging(object):
     def __init__(self, name, level=0):
@@ -180,13 +177,6 @@ class Machine(object):
         else:
             raise ValueError(state, "not in status")
 
-    def doBack(self):
-        '''退回到上一状态'''
-        if len(self.__states) < 2:return False
-        self.__states.pop() # 当前状态
-        self.__state = self.__states.pop()
-        return True
-
 class FeatureMachine:
     def __init__(self):
         self._left, self._mid, self._right = (None, None, None)
@@ -268,6 +258,33 @@ class Signal(object):
         self.name = name
         self.level = level
 
+class BaseHandler(object):
+    def __init__(self, level):
+        self.__level = level
+        
+    @property
+    def LEVEL(self):
+        return self.__level
+    
+    def log(self, *args, **kwords):
+        if config.debug:
+            print("+", self.LEVEL, self.__class__.__name__, *args, **kwords)
+            return
+        config.logger.debug("+", self.LEVEL, self.__class__.__name__, *args, **kwords)
+
+class Chan(object):
+    def __init__(self, symbol, level):
+        self.__level = level
+        self.__symbol = symbol
+    
+    @property
+    def LEVEL(self):
+        return self.__level
+    @property
+    def symbol(self):
+        return self.__symbol
+
+        
 @enforce_types
 class RawCandle(object):
     """原始K线"""
@@ -339,24 +356,6 @@ def binCandle(arr:List[RawCandle], freq:Freq):
     vol = sum([k.vol for k in arr])
     return RawCandle(symbol, dt, open, high, low, close, vol, freq)
 
-class Chan(object):
-    def __init__(self, symbol, level):
-        self.__level = level
-        self.__symbol = symbol
-    
-    @property
-    def LEVEL(self):
-        return self.__level
-    @property
-    def symbol(self):
-        return self.__symbol
-
-    def log(self, *args, **kwords):
-        if config.debug:
-            print("+", self.LEVEL, self.__class__.__name__, *args, **kwords)
-            return
-        config.logger.debug(self.__class__.__name__, *args, **kwords)
-        
 @enforce_types
 class ChanCandle(Chan):
     """缠论k线"""
@@ -1169,15 +1168,13 @@ def tripleRelation(l:ChanCandle, m:ChanCandle, r:ChanCandle, isRight=False) -> S
                 return Shape.T # 喇叭口型
 
 
-class ZhongShuHandler(FeatureMachine):
+class ZhongShuHandler(FeatureMachine, BaseHandler):
     def __init__(self, level:int=1):
-        super(ZhongShuHandler, self).__init__()
-        self.__level = level
+        FeatureMachine.__init__(self)
+        BaseHandler.__init__(self, level)
         self.zhshs = []
         self.zsMachine = Machine([0,1,-1, 2,-2])
         self.stack = Stack()
-        self.debug = 0
-        self.logging = None
 
         self.features = []
 
@@ -1187,16 +1184,8 @@ class ZhongShuHandler(FeatureMachine):
         self.stack.push((deal, state, features))
 
     @property
-    def LEVEL(self):
-        return self.__level
-    @property
     def state(self):
         return {0: "混沌", 1: "阳", -1: "阴", 2:"太阳", -2:"太阴"}[self.zsMachine.state]
-
-    def log(self, *args, **kwords):
-        if self.debug:print("+", self.LEVEL, self.__class__.__name__, *args, **kwords)
-        if self.logging:
-            self.logging.debug(self.__class__.__name__, *args, **kwords)
 
     @enforce_types
     def append(self, feature: [ChanCandle, ChanFeature]):
@@ -1834,7 +1823,7 @@ class FenXingHandler(FeatureMachine):
         self.stack.push((deal, state, candles, fx.style if fx else None))
         return fx
 
-class BiHandler:
+class BiHandler(BaseHandler):
     ''' 笔 处理 '''
 
     @classmethod
@@ -1875,6 +1864,7 @@ class BiHandler:
         return result
 
     def __init__(self, cklines:List[ChanCandle], zsh=None):
+        BaseHandler.__init__(self, 0)
         self.cklines:List[ChanCandle] = cklines
         self.points:List[ChanFenXing] = []
         self.features:List[ChanFeature] = []
@@ -1897,16 +1887,6 @@ class BiHandler:
         self.zsh = zsh
         self.lastFx = None
 
-    def log(self, *args, **kwords):
-        if config.debug:
-            print("+", self.LEVEL, self.__class__.__name__, *args, **kwords)
-            return
-        if config.debug:
-            config.logger.debug(self.__class__.__name__, *args, **kwords)
-
-    @property
-    def LEVEL(self) -> int:
-        return 0
     @property
     def state(self):
         return {0:"混沌", 1:"少陽", 2:"太陽", -1:"少陰", -2:"老陰"} [self.biMachine.state]
@@ -2377,11 +2357,12 @@ class BiHandler:
         self.log()
 
 
-class FeatureHandler(FeatureMachine):
+class FeatureHandler(FeatureMachine, BaseHandler):
     ''' 线段处理 '''
-    __slots__ = ["visual", "last", "stack", "__level", "zsh", "featureMachine", "features", "segments", "points", "lastFeature", "lastMerge", "isVisual"]
+    __slots__ = ["last", "stack", "zsh", "featureMachine", "features", "segments", "points", "lastFeature", "lastMerge"]
     def __init__(self, level=1, zsh:ZhongShuHandler=None):
-        super(FeatureHandler, self).__init__()
+        FeatureMachine.__init__(self)
+        BaseHandler.__init__(self, level)
         self.featureMachine = Machine([0,1,-1,2,-2])
         self.features = []
         self.segments = []
@@ -2389,11 +2370,8 @@ class FeatureHandler(FeatureMachine):
         self.lastMerge = None
         self.logging = None
 
-        self.__level = level
         self.zsh = zsh
 
-        self.isVisual = False
-        self.visual = None
         self.last = None
 
         self.stack = Stack()
@@ -2401,6 +2379,7 @@ class FeatureHandler(FeatureMachine):
         state = self.featureMachine.state
         candles = self._left, self._mid, self._right
         self.stack.push((deal, state, candles, 0))
+        
         self.poped = 0
         self.appended = 0
 
@@ -2423,21 +2402,12 @@ class FeatureHandler(FeatureMachine):
                 ...
 
     @property
-    def LEVEL(self):
-        return self.__level
-    @property
     def deal(self):
         return self._deal_left, self._deal_mid, self._deal_right
     @property
     def state(self):
         return {0:"混沌", 1:"少阳", 2:"老阳", -1:"少阴", -2:"老阴"}[self.featureMachine.state]
 
-    def log(self, *args, **kwords):
-        if config.debug:
-            print("+", self.LEVEL, self.__class__.__name__, *args, **kwords)
-            return
-        if logging:
-            config.logger.debug(self.__class__.__name__, *args, **kwords)
 
     def __pop_segment(self):
         point = None
@@ -2974,7 +2944,7 @@ class ChZhShCh:
         bio = BytesIO()
         for k in self.klines:
             bio.write(bytes(k))
-        with open(f"chzhshch_log_{int(datetime.now().timestamp())}", "wb") as f:
+        with open(f"chzhshch_{self.klines[0].symbol}_{int(self.klines[0].dt.timestamp())}_{int(self.klines[-1].dt.timestamp())}", "wb") as f:
             f.write(bio.getbuffer())
             print("文件保存在:", f.name)
 
