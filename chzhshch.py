@@ -2043,8 +2043,19 @@ class BiHandler(BaseHandler):
                 self.biMachine.state = 0
             elif self.points[-1].m is fx.m:
                 if self.points[-1].style == fx.style:
-                    self.__replace_bi(fx, sys._getframe().f_lineno)
-
+                    if len(self.points) == 1:
+                        self.__replace_bi(fx, sys._getframe().f_lineno)
+                        break
+                    if fx.style is Shape.G:
+                        state = 1
+                        self.biMachine.state = state
+                    elif fx.style is Shape.D:
+                        state = -1
+                        self.biMachine.state = state
+                    else:
+                        raise ChanException
+                    self.__pop_bi(sys._getframe().f_lineno)
+                    
             if self.points:
                 self.checkPoints(fx)
 
@@ -2083,6 +2094,19 @@ class BiHandler(BaseHandler):
 
                 case 1, Shape.D: # 少阳
                     if fx.m.low < self.points[-1].m.low:
+                        # 人工修正
+                        tmp = self.T
+                        if tmp and self.points[-1].m.dt < tmp.m.dt and tmp.m.high > self.points[-2].m.high:
+                            self.__pop_bi(sys._getframe().f_lineno)
+                            self.__replace_bi(tmp, sys._getframe().f_lineno)
+                            bi = self.cklines[self.points[-1].m.index:fx.m.index+1]
+                            if len(bi) >= 5:
+                                state = -1
+                            else:
+                                state = 2
+                            info = "修正1D"
+                            break
+                        # 修正结束
                         self.__replace_bi(fx, sys._getframe().f_lineno)
                         state = -2
                     break
@@ -2091,10 +2115,23 @@ class BiHandler(BaseHandler):
                     break
 
                 case 1, Shape.G: # 少阳
-                    if ps >= 2:
+                    # 修正结束
+                    if len(self.points) >= 2:
                         if fx.m is self.getHigh(self.points[-2].m, fx.r):
                             self.T = fx
                             info ="1G"
+                            # 无脑修正， 不符合笔规则
+                            high = fx.m.high
+                            low = self.points[-2].m.low
+                            v = (high - low) / low
+                            print(v)
+                            if v >= 0.02:
+                                self.__append_bi(fx, sys._getframe().f_lineno)
+                                info = "振幅1G"
+                                state = 2
+                                print(info)
+                                break
+                            # 无 脑 结 束
 
                     relation = doubleRelation(self.points[-1].m, fx.m)
                     if relation in (Direction.Up, Direction.JumpUp):
@@ -2127,10 +2164,22 @@ class BiHandler(BaseHandler):
                     break
 
                 case 2, Shape.D: # 太阳
-                    if ps >= 2:
+                    if len(self.points) >= 2:
                         if fx.m is self.getLow(self.points[-2].m, fx.r):
                             self.B = fx
                             info = "2D"
+                            # 无脑修正， 不符合笔规则
+                            low = fx.m.low
+                            high = self.points[-2].m.high
+                            v = (high - low) / high
+                            print(v)
+                            if v >= 0.02:
+                                self.__append_bi(fx, sys._getframe().f_lineno)
+                                info = "振幅2D"
+                                state = -2
+                                print(info)
+                                break
+                            # 无 脑 结 束
 
                     size = (fx.r.index - self.points[-1].m.index)
                     relation = doubleRelation(self.points[-1].m, fx.m)
@@ -2209,10 +2258,22 @@ class BiHandler(BaseHandler):
                     break
 
                 case -1, Shape.D: # 少阴
-                    if ps >= 2:
+                    if len(self.points) >= 2:
                         if fx.m is self.getLow(self.points[-2].m, fx.r):
                             self.B = fx
                             info = "-1D"
+                            # 无脑修正， 不符合笔规则
+                            low = fx.m.low
+                            high = self.points[-2].m.high
+                            v = (high - low) / high
+                            print(v)
+                            if v >= 0.02:
+                                self.__append_bi(fx, sys._getframe().f_lineno)
+                                info = "振幅-1D"
+                                state = -2
+                                print(info)
+                                break
+                            # 无 脑 结 束
 
                     relation = doubleRelation(self.points[-1].m, fx.m)
                     if relation in (Direction.Down, Direction.JumpDown):
@@ -2255,6 +2316,19 @@ class BiHandler(BaseHandler):
 
                 case -1, Shape.G: # 少阴
                     if fx.m.high > self.points[-1].m.high:
+                        # 人工修正
+                        tmp = self.B
+                        if tmp and self.points[-1].m.dt < tmp.m.dt and tmp.m.low < self.points[-2].m.low:
+                            self.__pop_bi(sys._getframe().f_lineno)
+                            self.__replace_bi(tmp, sys._getframe().f_lineno)
+                            bi = self.cklines[self.points[-1].m.index:fx.m.index+1]
+                            if len(bi) >= 5:
+                                state = 1
+                            else:
+                                state = -2
+                            info = "修正-1G"
+                            break
+                        # 修正结束
                         self.__replace_bi(fx, sys._getframe().f_lineno)
                         state = 2
                     break
@@ -2309,10 +2383,24 @@ class BiHandler(BaseHandler):
                     break
 
                 case -2, Shape.G: # 太阴
-                    if ps >= 2:
+                    if len(self.points) >= 2:
                         if fx.m is self.getHigh(self.points[-2].m, fx.r):
                             self.T = fx
                             info = "-2G"
+                            
+                            # 无脑修正， 不符合笔规则
+                            high = fx.m.high
+                            low = self.points[-2].m.low
+                            v = (high - low) / low
+                            print(v)
+                            if v >= 0.02:
+                                self.__append_bi(fx, sys._getframe().f_lineno)
+                                info = "振幅-2G"
+                                state = 2
+                                print(info)
+                                break
+                            # 无 脑 结 束
+                            
 
                     size = (fx.r.index - self.points[-1].m.index)
                     relation = doubleRelation(self.points[-1].m, fx.m)
