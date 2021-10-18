@@ -95,6 +95,7 @@ class Config:
         self.__debug = 0
         self.logger = Logging("chzhshch")
         self.simple = False
+        self.nb = False # 新笔
     
     @property
     def debug(self):
@@ -527,16 +528,16 @@ class ChanFeature(Chan):
             return
 
         if type(self.elements[0]) is ChanCandle:
-            if len(self.elements) < 5 and isFixed == 1:
-                print("ChanFeature 警告: 笔结构不完整。", len(self.elements), self.isFixed)
+            #if len(self.elements) < 5 and isFixed == 1:
+            #    print("ChanFeature 警告: 笔结构不完整。", len(self.elements), self.isFixed)
 
             if self.__start.m != self.elements[0]:raise ValueError(5)
             if self.__end.m != self.elements[-1]:
                 print(self.__end.m, self.elements[-1])
                 raise ValueError(6)
         else:
-            if len(self.elements) < 3:
-                print("ChanFeature 警告: 线段结构不完整。", len(self.elements), self.isFixed)
+            #if len(self.elements) < 3:
+            #    print("ChanFeature 警告: 线段结构不完整。", len(self.elements), self.isFixed)
 
             if self.__start != self.elements[0].start:raise ValueError(5)
             if self.__end != self.elements[-1].end:raise ValueError(6)
@@ -590,7 +591,6 @@ class ChanFeature(Chan):
         ss_err = sum([(y[i] - slope * x[i] - y_intercept) * (y[i] - slope * x[i] - y_intercept) for i in range(len(x))])
         rsq = 1 - ss_err / ss_tot
 
-        #return rsq
         return round(rsq, 8)
 
     @property
@@ -604,46 +604,38 @@ class ChanFeature(Chan):
         if (start.style == Shape.D) and (end.style == Shape.G):
             if start.low > end.high:
                 raise ValueError("DG 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
-            #return self.start
             return self.end
         elif (start.style == Shape.G) and (end.style == Shape.D):
             if start.high < end.low:
                 raise ValueError("GD 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             return self.start
-            #return self.end
 
         elif (start.style == Shape.D) and (end.style == Shape.S):
             if start.low > end.r.high:
                 raise ValueError("DS 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
-            #return self.start
             return self.end
         elif (start.style == Shape.G) and (end.style == Shape.X):
             if start.high < end.r.low:
                 raise ValueError("GX 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             return self.start
-            #return self.end
 
         elif (start.style == Shape.S) and (end.style == Shape.S):
             if start.l.low > end.r.high:
                 raise ValueError("SS 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
-            #return self.start
             return self.end
         elif (start.style == Shape.X) and (end.style == Shape.X):
             if start.l.high < end.r.low:
                 raise ValueError("XX 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             return self.start
-            #return self.end
 
         elif (start.style == Shape.S) and (end.style == Shape.G):
             if start.l.low > end.high:
                 raise ValueError("SG 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
-            #return self.start
             return self.end
         elif (start.style == Shape.X) and (end.style == Shape.D):
             if start.l.high < end.low:
                 raise ValueError("XD 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
             return self.start
-            #return self.end
 
         else:
             raise TypeError(doubleRelation(start, end), start.style, end.style)
@@ -662,44 +654,36 @@ class ChanFeature(Chan):
             if start.low > end.high:
                 raise ValueError("DG 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
             return self.start
-            #return self.end
         elif (start.style == Shape.G) and (end.style == Shape.D):
             if start.high < end.low:
                 raise ValueError("GD 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
-            #return self.start
             return self.end
 
         elif (start.style == Shape.D) and (end.style == Shape.S):
             if start.low > end.r.high:
                 raise ValueError("DS 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
             return self.start
-            #return self.end
         elif (start.style == Shape.G) and (end.style == Shape.X):
             if start.high < end.r.low:
                 raise ValueError("GX 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
-            #return self.start
             return self.end
 
         elif (start.style == Shape.S) and (end.style == Shape.S):
             if start.l.low > end.r.high:
                 raise ValueError("SS 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
             return self.start
-            #return self.end
         elif (start.style == Shape.X) and (end.style == Shape.X):
             if start.l.high < end.r.low:
                 raise ValueError("XX 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
-            #return self.start
             return self.end
 
         elif (start.style == Shape.S) and (end.style == Shape.G):
             if start.l.low > end.high:
                 raise ValueError("SG 结构错误: 上涨特征序列 起点比终点高", start.dt, end.dt)
             return self.start
-            #return self.end
         elif (start.style == Shape.X) and (end.style == Shape.D):
             if start.l.high < end.low:
                 raise ValueError("XD 结构错误: 下跌特征序列 起点比终点低", start.dt, end.dt)
-            #return self.start
             return self.end
 
         else:
@@ -796,6 +780,26 @@ class ChanFeature(Chan):
             assert not (pillar.direction != self.direction), ValueError("王德发")
             return pillar
 
+    def isBi(self):
+        if self.LEVEL != 0:return False
+            
+        if config.nb:
+            if not (len(self.elements) >= 4):return False
+            
+        if not (len(self.elements) >= 5):return False
+        
+        high = max(self.elements, key=lambda x:x.high)
+        low = min(self.elements, key=lambda x:x.low)
+        if self.direction is Direction.Up:
+            if (low,high) == (self.elements[0], self.elements[-1]):
+                return True
+        elif self.direction is Direction.Down:
+            if (low,high) == (self.elements[-1], self.elements[0]):
+                return True
+        else:
+            raise ChanException
+        return False
+
     def isNext(self, feature: "ChanFeature") -> bool:
         if not (isinstance(feature, type(self))):raise ChanException
         if self.end is feature.start:
@@ -819,6 +823,7 @@ class ChanFeature(Chan):
             if self.direction is Direction.Up:
                 if self.start.m.low != low:print(self.start.dt, "check 向上笔, 起点不是最低点", n)
                 if self.end.m.high != high:print(self.start.dt, "check 向上笔, 终点不是最高点", n)
+                ...
             if self.direction is Direction.Down:
                 if self.start.m.high != high:print(self.start.dt, "check 向下笔, 起点不是最高点", n)
                 if self.end.m.low != low:print(self.start.dt, "check 向下笔, 终点不是最低点", n)
@@ -882,16 +887,28 @@ def mergeFeature(l:ChanFeature, r:ChanFeature) -> ChanFeature:
             elements = [r.elements[0], l.elements[-1]]
         if l.LEVEL == 0:
             elements = [start.m, end.m]
-        #print(elements)
 
         if start.style == end.style:
             raise ValueError("相同分型无法成笔")
         feature = ChanFeature(start, end, elements, level=l.LEVEL, isFixed = l.isFixed + r.isFixed)
         return feature
 
+
+class ChanLianJie(Chan, list):
+    def __init__(self, symbol:str, level:int=0):
+        #Chan.__init__(symbol, level)
+        list.__init__([])
+    
+    @enforce_types
+    def append(self, obj:ChanFeature):
+        super(list, self).append(obj)
+        return self
+        
+        
+
 @enforce_types
 class ChanZhongShu(Chan):
-    __slots__ = ["symbol", "elements", "__level", "__l", "__m", "__r"]
+    __slots__ = ["elements", "__level", "__l", "__m", "__r"]
     def __init__(self, symbol:str, left:[ChanCandle, ChanFeature], mid:[ChanCandle, ChanFeature], right:[ChanCandle, ChanFeature], level:int=0):
         '''三根k线重叠区间为最小中枢
         '''
@@ -1024,8 +1041,25 @@ class ChanZhongShu(Chan):
         else:
             raise ChanException("未知中枢区间")
 
+    def isElongate(self, feature):
+        # 走势中枢延伸 (详情见: 缠中说禅走势中枢中心定理一)
+        # 不延伸则是 第三类买卖点
+        if self.LEVEL < 1:raise Exception()
+        if feature.LEVEL > self.LEVEL:raise Exception
+        return self.inInterval(feature)
+    
+    def isContinue(self, zs):
+        # 走势中枢延续 (详情见: 缠中说禅走势中枢中心定理二)
+        relation = doubleRelation(self.toPillar(), zs.toPillar())
+        if relation == Direction.JumpUp:
+            return True
+        elif relation == Direction.JumpDown:
+            return True
+        else:
+            return False
+    
     def isOutspread(self, zs:"ChanZhongShu") -> bool:
-        # 是否扩张
+        # 是否扩张，即级别升级
         relation = doubleRelation(self.interval, zs.interval)
         if relation == Direction.JumpUp:
             if self.GG >= zs.DD:
@@ -1037,7 +1071,6 @@ class ChanZhongShu(Chan):
             print("中枢是否扩展关系", relation)
 
     def isExtension(self, zs:"ChanZhongShu") -> bool:
-        # 是否扩展
         ...
 
     @enforce_types
@@ -1167,13 +1200,14 @@ def tripleRelation(l:ChanCandle, m:ChanCandle, r:ChanCandle, isRight=False) -> S
 
 
 class ZhongShuHandler(FeatureMachine, BaseHandler):
-    def __init__(self, level:int=1):
+    def __init__(self, symbol:str=None, level:int=1):
         FeatureMachine.__init__(self)
         BaseHandler.__init__(self, level)
         self.zhshs = []
         self.zsMachine = Machine([0,1,-1, 2,-2])
 
         self.features = []
+        self.lianjie = ChanLianJie(symbol, level)
 
         self.stack = Stack()
         deal = self._deal_left, self._deal_mid, self._deal_right
@@ -1687,7 +1721,6 @@ class FenXingHandler(FeatureMachine):
         deal = self._deal_left, self._deal_mid, self._deal_right
         state = self.shapeMachine.state
         #print(deal, state)
-        #SX = 1 # 是否需要返回 上升分型下降分型
         #right = 0 # 是否允许逆序包含
         if self.shapeMachine.state == 0:
             if self._deal_left:
@@ -2646,8 +2679,8 @@ class FeatureHandler(FeatureMachine, BaseHandler):
         self.log(colored("APPEND", "green"), self.state, self.LEVEL, deal, segment)
 
         while 1:
-            match self.featureMachine.state:
-                case 0:
+            match self.featureMachine.state, (self._deal_left, self._deal_mid, self._deal_right):
+                case 0, (1,0,0):
                     relation = segment.direction
                     if relation in (Direction.Up, Direction.JumpUp, ):
                         state = 1
@@ -2659,345 +2692,352 @@ class FeatureHandler(FeatureMachine, BaseHandler):
                     ADD += 1
                     break
 
-                case 1:
-                    # 少阳
+                case 1, (1,0,0):
                     if segment.direction is Direction.Up:
                         self.log("不需要处理 1")
                         break
+                    self.log(sys._getframe().f_lineno, "第一特征序列", segment)
+                    deal = (0,1,0)
+                    self.setLeft(segment, sys._getframe().f_lineno)
 
-                    match (self._deal_left, self._deal_mid, self._deal_right):
-                        case (1,0,0):
-                            self.log(sys._getframe().f_lineno, "第一特征序列", segment)
+                case 1, (0,1,0):
+                    if segment.direction is Direction.Up:
+                        self.log("不需要处理 1")
+                        break
+                    # 第二特征序列
+                    if self._left.direction != segment.direction:
+                        raise Exception(self.state)
+
+                    relation = doubleRelation(self._left.toPillar(), segment.toPillar())
+                    if relation in (Direction.Up, Direction.JumpUp, Direction.Right):
+                        # 涨, 逆序包含
+                        self.log(sys._getframe().f_lineno, "第二特征序列", relation)
+                        deal = (0,0,1)
+                        self.setMid(segment, sys._getframe().f_lineno)
+                        self.isVisual = True
+
+                    elif relation in (Direction.Down, Direction.JumpDown):
+                        # 跌
+                        self.log(sys._getframe().f_lineno, "第二特征序列 下跌跳转", relation)
+                        self.__append_segment(self._left.high, sys._getframe().f_lineno)
+                        ADD += 1
+                        deal = (0,1,0)
+                        self.setLeft(self.segments[-2], sys._getframe().f_lineno)
+                        state = -1
+
+                    elif relation in (Direction.Left,):
+                        # 顺序包含
+                        self.log(sys._getframe().f_lineno, "第二特征序列 顺序包含", relation)
+                        deal = (0,1,0)
+                        self.lastMerge = mergeFeature(self._left, segment)
+                        self.setLeft(self.lastMerge, sys._getframe().f_lineno)
+                    else:
+                        raise TypeError(relation)
+
+                case 1, (0,0,1):
+                    if segment.direction is Direction.Up:
+                        self.log("不需要处理 1")
+                        break
+                    # 第三特征序列
+                    if self._mid.direction != segment.direction:
+                        raise Exception(self._mid.direction, segment.direction)
+
+                    relation = doubleRelation(self._mid.toPillar(), segment.toPillar())
+                    if relation in (Direction.Up, Direction.JumpUp, Direction.Right):
+                        # 涨, 逆序包含
+                        if (self._mid.direction is Direction.Down) and (self._mid.HIGH == segment.HIGH) and (relation is Direction.Right):
+                            # 特殊处理 1
+                            self.log(sys._getframe().f_lineno, "第三特征序列 特殊处理 1", relation)
+                            self.__append_segment(self._mid.high, sys._getframe().f_lineno)
+                            ADD += 1
                             deal = (0,1,0)
-                            self.setLeft(segment, sys._getframe().f_lineno)
+                            state = -1
+                            self.setLeft(self.segments[-2], sys._getframe().f_lineno)
+                            self.setMid(None, sys._getframe().f_lineno)
+                            break
+                        self.log(sys._getframe().f_lineno, "第三特征序列", relation)
+                        deal = (0,0,1)
+                        self.setLeft(self._mid, sys._getframe().f_lineno)
+                        self.setMid(segment, sys._getframe().f_lineno)
+                        self.isVisual = True
 
-                        case (0,1,0):
-                            # 第二特征序列
-                            if self._left.direction != segment.direction:
-                                raise Exception(self.state)
+                    elif relation in (Direction.Down, Direction.JumpDown):
+                        # 下跌， 顶分型成立
+                        if Direction.JumpUp is doubleRelation(self._left.toPillar(), self._mid.toPillar()):
+                            # 缺口
+                            self.log(sys._getframe().f_lineno, "第三特征序列 缺口跳转", relation)
+                            deal = (0,1,0)
+                            self.setRight(self._mid, sys._getframe().f_lineno)
+                            self.setLeft(self.segments[-2], sys._getframe().f_lineno)
+                            self.setMid(None, sys._getframe().f_lineno)
+                            state = 2
+                        else:
+                            self.log(sys._getframe().f_lineno, "第三特征序列 结束跳转", relation)
+                            deal = (0,1,0)
+                            self.__append_segment(self._mid.high, sys._getframe().f_lineno)
+                            ADD += 1
+                            self.setLeft(self.segments[-2], sys._getframe().f_lineno)
+                            state = -1
 
-                            relation = doubleRelation(self._left.toPillar(), segment.toPillar())
-                            if relation in (Direction.Up, Direction.JumpUp, Direction.Right):
-                                # 涨, 逆序包含
-                                self.log(sys._getframe().f_lineno, "第二特征序列", relation)
-                                deal = (0,0,1)
-                                self.setMid(segment, sys._getframe().f_lineno)
-                                self.isVisual = True
+                    elif relation in (Direction.Left,):
+                        # 顺序包含
+                        self.log(sys._getframe().f_lineno, "第三特征序列 顺序包含", relation)
+                        deal = (0,0,1)
+                        self.lastMerge = mergeFeature(self._mid, segment)
+                        self.setMid(self.lastMerge, sys._getframe().f_lineno)
+                        self.isVisual = True
+                    else:
+                        raise TypeError(relation)
 
-                            elif relation in (Direction.Down, Direction.JumpDown):
-                                # 跌
-                                self.log(sys._getframe().f_lineno, "第二特征序列 下跌跳转", relation)
-                                self.__append_segment(self._left.high, sys._getframe().f_lineno)
-                                ADD += 1
-                                deal = (0,1,0)
-                                self.setLeft(self.segments[-2], sys._getframe().f_lineno)
-                                state = -1
 
-                            elif relation in (Direction.Left,):
-                                # 顺序包含
-                                self.log(sys._getframe().f_lineno, "第二特征序列 顺序包含", relation)
-                                deal = (0,1,0)
-                                self.lastMerge = mergeFeature(self._left, segment)
-                                self.setLeft(self.lastMerge, sys._getframe().f_lineno)
-                            else:
-                                raise TypeError(relation)
-
-                        case (0,0,1):
-                            # 第三特征序列
-                            if self._mid.direction != segment.direction:
-                                raise Exception(self._mid.direction, segment.direction)
-
-                            relation = doubleRelation(self._mid.toPillar(), segment.toPillar())
-                            if relation in (Direction.Up, Direction.JumpUp, Direction.Right):
-                                # 涨, 逆序包含
-                                if (self._mid.direction is Direction.Down) and (self._mid.HIGH == segment.HIGH) and (relation is Direction.Right):
-                                    # 特殊处理 1
-                                    self.log(sys._getframe().f_lineno, "第三特征序列 特殊处理 1", relation)
-                                    self.__append_segment(self._mid.high, sys._getframe().f_lineno)
-                                    ADD += 1
-                                    deal = (0,1,0)
-                                    state = -1
-                                    self.setLeft(self.segments[-2], sys._getframe().f_lineno)
-                                    self.setMid(None, sys._getframe().f_lineno)
-                                    break
-                                self.log(sys._getframe().f_lineno, "第三特征序列", relation)
-                                deal = (0,0,1)
-                                self.setLeft(self._mid, sys._getframe().f_lineno)
-                                self.setMid(segment, sys._getframe().f_lineno)
-                                self.isVisual = True
-
-                            elif relation in (Direction.Down, Direction.JumpDown):
-                                # 下跌， 顶分型成立
-                                if Direction.JumpUp is doubleRelation(self._left.toPillar(), self._mid.toPillar()):
-                                    # 缺口
-                                    self.log(sys._getframe().f_lineno, "第三特征序列 缺口跳转", relation)
-                                    deal = (0,1,0)
-                                    self.setRight(self._mid, sys._getframe().f_lineno)
-                                    self.setLeft(self.segments[-2], sys._getframe().f_lineno)
-                                    self.setMid(None, sys._getframe().f_lineno)
-                                    state = 2
-                                else:
-                                    self.log(sys._getframe().f_lineno, "第三特征序列 结束跳转", relation)
-                                    deal = (0,1,0)
-                                    self.__append_segment(self._mid.high, sys._getframe().f_lineno)
-                                    ADD += 1
-                                    self.setLeft(self.segments[-2], sys._getframe().f_lineno)
-                                    state = -1
-
-                            elif relation in (Direction.Left,):
-                                # 顺序包含
-                                self.log(sys._getframe().f_lineno, "第三特征序列 顺序包含", relation)
-                                deal = (0,0,1)
-                                self.lastMerge = mergeFeature(self._mid, segment)
-                                self.setMid(self.lastMerge, sys._getframe().f_lineno)
-                                self.isVisual = True
-                            else:
-                                raise TypeError(relation)
-
-                case -1:
+                case -1, (1,0,0):
                     if segment.direction is Direction.Down:
                         self.log("不需要处理 -1")
                         break
+                    self.log(sys._getframe().f_lineno, "第一特征序列", segment)
+                    deal = (0,1,0)
+                    self.setLeft(segment, sys._getframe().f_lineno)
 
-                    match (self._deal_left, self._deal_mid, self._deal_right):
-                        case (1,0,0):
-                            self.log(sys._getframe().f_lineno, "第一特征序列", segment)
+                case -1, (0,1,0):
+                    if segment.direction is Direction.Down:
+                        self.log("不需要处理 -1")
+                        break
+                    # 第二特征序列
+                    if self._left.direction != segment.direction:
+                        raise Exception()
+
+                    relation = doubleRelation(self._left.toPillar(), segment.toPillar())
+                    if relation in (Direction.Up, Direction.JumpUp):
+                        # 涨
+                        self.log(sys._getframe().f_lineno, "第二特征序列 上涨跳转", relation)
+                        self.__append_segment(self._left.low, sys._getframe().f_lineno)
+                        ADD += 1
+                        deal = (0,1,0)
+                        self.setLeft(self.segments[-2], sys._getframe().f_lineno)
+                        state = 1
+
+                    elif relation in (Direction.Down, Direction.JumpDown, Direction.Right):
+                        # 跌, 逆序包含
+                        self.log(sys._getframe().f_lineno, "第二特征序列", relation)
+                        deal = (0,0,1)
+                        self.setMid(segment, sys._getframe().f_lineno)
+                        self.isVisual = True
+
+                    elif relation in (Direction.Left,):
+                        # 顺序包含
+                        self.log(sys._getframe().f_lineno, "第二特征序列 顺序包含", relation)
+                        deal = (0,1,0)
+                        self.lastMerge = mergeFeature(self._left, segment)
+                        self.setLeft(self.lastMerge, sys._getframe().f_lineno)
+                    else:
+                        raise TypeError(relation)
+
+                case -1, (0,0,1):
+                    if segment.direction is Direction.Down:
+                        self.log("不需要处理 -1")
+                        break
+                    # 第三特征序列
+                    if self._mid.direction != segment.direction:
+                        raise Exception(self._mid, segment)
+
+                    relation = doubleRelation(self._mid.toPillar(), segment.toPillar())
+                    if relation in (Direction.Up, Direction.JumpUp):
+                        # 涨
+                        if Direction.JumpDown is doubleRelation(self._left.toPillar(), self._mid.toPillar()):
+                            # 缺口
+                            self.log(sys._getframe().f_lineno, "第三特征序列 缺口 跳转", relation)
                             deal = (0,1,0)
-                            self.setLeft(segment, sys._getframe().f_lineno)
+                            self.setRight(self._mid, sys._getframe().f_lineno)
+                            self.setLeft(self.segments[-2], sys._getframe().f_lineno)
+                            self.setMid(None, sys._getframe().f_lineno)
+                            state = -2
+                        else:
+                            self.log(sys._getframe().f_lineno, "第三特征序列 结束 跳转", relation)
+                            self.__append_segment(self._mid.low, sys._getframe().f_lineno)
+                            ADD += 1
+                            deal = (0,1,0)
+                            self.setLeft(self.segments[-2], sys._getframe().f_lineno)
+                            # self.setMid(None, sys._getframe().f_lineno)
+                            state = 1
 
-                        case (0,1,0):
-                            # 第二特征序列
-                            if self._left.direction != segment.direction:
-                                raise Exception()
+                    elif relation in (Direction.Down, Direction.JumpDown, Direction.Right):
+                        # 跌, 逆序包含
+                        if (self._mid.direction is Direction.Up) and (self._mid.LOW == segment.LOW) and (relation is Direction.Right):
+                            # 特殊处理 1
+                            self.log(sys._getframe().f_lineno, "第三特征序列 特殊处理 1", relation)
+                            self.__append_segment(self._mid.low, sys._getframe().f_lineno)
+                            ADD += 1
+                            deal = (0,1,0)
+                            state = 1
+                            self.setLeft(self.segments[-2], sys._getframe().f_lineno)
+                            self.setMid(None, sys._getframe().f_lineno)
+                            break
 
-                            relation = doubleRelation(self._left.toPillar(), segment.toPillar())
-                            if relation in (Direction.Up, Direction.JumpUp):
-                                # 涨
-                                self.log(sys._getframe().f_lineno, "第二特征序列 上涨跳转", relation)
-                                self.__append_segment(self._left.low, sys._getframe().f_lineno)
-                                ADD += 1
-                                deal = (0,1,0)
-                                self.setLeft(self.segments[-2], sys._getframe().f_lineno)
-                                state = 1
+                        self.log(sys._getframe().f_lineno, "第三特征序列", relation)
+                        deal = (0,0,1)
+                        self.setLeft(self._mid, sys._getframe().f_lineno)
+                        self.setMid(segment, sys._getframe().f_lineno)
+                        self.isVisual = True
 
-                            elif relation in (Direction.Down, Direction.JumpDown, Direction.Right):
-                                # 跌, 逆序包含
-                                self.log(sys._getframe().f_lineno, "第二特征序列", relation)
-                                deal = (0,0,1)
-                                self.setMid(segment, sys._getframe().f_lineno)
-                                self.isVisual = True
+                    elif relation in (Direction.Left,):
+                        # 顺序包含
+                        self.log(sys._getframe().f_lineno, "第三特征序列 顺序包含", relation)
+                        deal = (0,0,1)
+                        self.lastMerge = mergeFeature(self._mid, segment)
+                        self.setMid(self.lastMerge, sys._getframe().f_lineno)
+                        self.isVisual = True
 
-                            elif relation in (Direction.Left,):
-                                # 顺序包含
-                                self.log(sys._getframe().f_lineno, "第二特征序列 顺序包含", relation)
-                                deal = (0,1,0)
-                                self.lastMerge = mergeFeature(self._left, segment)
-                                self.setLeft(self.lastMerge, sys._getframe().f_lineno)
-                            else:
-                                raise TypeError(relation)
-
-                        case (0,0,1):
-                            # 第三特征序列
-                            if self._mid.direction != segment.direction:
-                                raise Exception(self._mid, segment)
-
-                            relation = doubleRelation(self._mid.toPillar(), segment.toPillar())
-                            if relation in (Direction.Up, Direction.JumpUp):
-                                # 涨
-                                if Direction.JumpDown is doubleRelation(self._left.toPillar(), self._mid.toPillar()):
-                                    # 缺口
-                                    self.log(sys._getframe().f_lineno, "第三特征序列 缺口 跳转", relation)
-                                    deal = (0,1,0)
-                                    self.setRight(self._mid, sys._getframe().f_lineno)
-                                    self.setLeft(self.segments[-2], sys._getframe().f_lineno)
-                                    self.setMid(None, sys._getframe().f_lineno)
-                                    state = -2
-                                else:
-                                    self.log(sys._getframe().f_lineno, "第三特征序列 结束 跳转", relation)
-                                    self.__append_segment(self._mid.low, sys._getframe().f_lineno)
-                                    ADD += 1
-                                    deal = (0,1,0)
-                                    self.setLeft(self.segments[-2], sys._getframe().f_lineno)
-                                    # self.setMid(None, sys._getframe().f_lineno)
-                                    state = 1
-
-                            elif relation in (Direction.Down, Direction.JumpDown, Direction.Right):
-                                # 跌, 逆序包含
-                                if (self._mid.direction is Direction.Up) and (self._mid.LOW == segment.LOW) and (relation is Direction.Right):
-                                    # 特殊处理 1
-                                    self.log(sys._getframe().f_lineno, "第三特征序列 特殊处理 1", relation)
-                                    self.__append_segment(self._mid.low, sys._getframe().f_lineno)
-                                    ADD += 1
-                                    deal = (0,1,0)
-                                    state = 1
-                                    self.setLeft(self.segments[-2], sys._getframe().f_lineno)
-                                    self.setMid(None, sys._getframe().f_lineno)
-                                    break
-
-                                self.log(sys._getframe().f_lineno, "第三特征序列", relation)
-                                deal = (0,0,1)
-                                self.setLeft(self._mid, sys._getframe().f_lineno)
-                                self.setMid(segment, sys._getframe().f_lineno)
-                                self.isVisual = True
-
-                            elif relation in (Direction.Left,):
-                                # 顺序包含
-                                self.log(sys._getframe().f_lineno, "第三特征序列 顺序包含", relation)
-                                deal = (0,0,1)
-                                self.lastMerge = mergeFeature(self._mid, segment)
-                                self.setMid(self.lastMerge, sys._getframe().f_lineno)
-                                self.isVisual = True
-
-                            else:
-                                raise TypeError(relation)
-
-                case 2:
+                    else:
+                        raise TypeError(relation)
+                    
+                case 2, (0,1,0): # 进入缺口模式
                     if segment.direction is Direction.Down:
                         self.log("不需要处理 2")
                         break
-                    # 进入缺口模式
-                    match (self._deal_left, self._deal_mid, self._deal_right):
-                        case (0,1,0):
-                            # 第二特征序列
-                            self.isVisual = True
-                            if self._left.direction != segment.direction:
-                                raise Exception()
+                    # 第二特征序列
+                    self.isVisual = True
+                    if self._left.direction != segment.direction:
+                        raise Exception()
 
-                            relation = doubleRelation(self._left.toPillar(), segment.toPillar())
-                            if relation in (Direction.Up, Direction.JumpUp, Direction.Right, Direction.Down, Direction.JumpDown):
-                                # 涨, 跌, 逆序包含
-                                self.log(sys._getframe().f_lineno, "第二特征序列 缺口模式", relation)
-                                deal = (0,0,1)
-                                self.setMid(segment, sys._getframe().f_lineno)
+                    relation = doubleRelation(self._left.toPillar(), segment.toPillar())
+                    if relation in (Direction.Up, Direction.JumpUp, Direction.Right, Direction.Down, Direction.JumpDown):
+                        # 涨, 跌, 逆序包含
+                        self.log(sys._getframe().f_lineno, "第二特征序列 缺口模式", relation)
+                        deal = (0,0,1)
+                        self.setMid(segment, sys._getframe().f_lineno)
 
-                            elif relation in (Direction.Left,):
-                                # 顺序包含
-                                self.log(sys._getframe().f_lineno, "第二特征序列 缺口模式 顺序包含", relation)
-                                deal = (0,1,0)
-                                self.lastMerge = mergeFeature(self._left, segment)
-                                self.setLeft(self.lastMerge, sys._getframe().f_lineno)
+                    elif relation in (Direction.Left,):
+                        # 顺序包含
+                        self.log(sys._getframe().f_lineno, "第二特征序列 缺口模式 顺序包含", relation)
+                        deal = (0,1,0)
+                        self.lastMerge = mergeFeature(self._left, segment)
+                        self.setLeft(self.lastMerge, sys._getframe().f_lineno)
 
-                            else:
-                                raise TypeError(relation)
+                    else:
+                        raise TypeError(relation)
 
-                        case (0,0,1):
-                            # 第三特征序列
-                            if self._mid.direction != segment.direction:
-                                raise Exception("应该:", str(segment.direction), "实际:", str(self._mid.direction))
-                            relation = doubleRelation(self._mid.toPillar(), segment.toPillar())
-                            if relation in (Direction.Up, Direction.JumpUp):
-                                # 涨
-                                self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 跳转", relation)
-                                self.__append_segment(self._right.high, sys._getframe().f_lineno)
-                                self.__append_segment(self._mid.low, sys._getframe().f_lineno)
-                                ADD += 2
-                                deal = (0,1,0)
-                                self.setLeft(self.segments[-2], sys._getframe().f_lineno)#
-                                if self._left.direction != Direction.Down:
-                                    raise Exception()
-                                state = 1
+                case 2, (0,0,1):
+                    if segment.direction is Direction.Down:
+                        self.log("不需要处理 2")
+                        break
+                    # 第三特征序列
+                    if self._mid.direction != segment.direction:
+                        raise Exception("应该:", str(segment.direction), "实际:", str(self._mid.direction))
+                    relation = doubleRelation(self._mid.toPillar(), segment.toPillar())
+                    if relation in (Direction.Up, Direction.JumpUp):
+                        # 涨
+                        self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 跳转", relation)
+                        self.__append_segment(self._right.high, sys._getframe().f_lineno)
+                        self.__append_segment(self._mid.low, sys._getframe().f_lineno)
+                        ADD += 2
+                        deal = (0,1,0)
+                        self.setLeft(self.segments[-2], sys._getframe().f_lineno)
+                        if self._left.direction != Direction.Down:
+                            raise Exception()
+                        state = 1
 
-                            elif relation in (Direction.Down, Direction.JumpDown):
-                                # 下跌
-                                self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 跳转", relation)
-                                self.__append_segment(self._right.high, sys._getframe().f_lineno)
-                                ADD += 1
-                                deal = (0,0,1)
-                                self.setLeft(self.segments[-3], sys._getframe().f_lineno)#
-                                self.setMid(self.segments[-1], sys._getframe().f_lineno)#
-                                if self._left.direction != self._mid.direction or self._mid.direction is Direction.Down:
-                                    raise Exception()
-                                state = -1
+                    elif relation in (Direction.Down, Direction.JumpDown):
+                        # 下跌
+                        self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 跳转", relation)
+                        self.__append_segment(self._right.high, sys._getframe().f_lineno)
+                        ADD += 1
+                        deal = (0,0,1)
+                        self.setLeft(self.segments[-3], sys._getframe().f_lineno)
+                        self.setMid(self.segments[-1], sys._getframe().f_lineno)
+                        if self._left.direction != self._mid.direction or self._mid.direction is Direction.Down:
+                            raise Exception()
+                        state = -1
 
-                            elif relation in (Direction.Left,):
-                                # 顺序包含
-                                self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 顺序包含", relation)
-                                deal = (0,0,1)
-                                self.lastMerge = mergeFeature(self._mid, segment)
-                                self.setMid(self.lastMerge, sys._getframe().f_lineno)
-                                self.isVisual = True
-                            elif relation in (Direction.Right,):
-                                # 逆序包含
-                                self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 逆序包含", relation)
-                                deal = (0,0,1)
-                                self.setLeft(self._mid, sys._getframe().f_lineno)
-                                self.setMid(segment, sys._getframe().f_lineno)
-                                self.isVisual = True
-                            else:
-                                raise TypeError(relation)
-
-                case -2:
+                    elif relation in (Direction.Left,):
+                        # 顺序包含
+                        self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 顺序包含", relation)
+                        deal = (0,0,1)
+                        self.lastMerge = mergeFeature(self._mid, segment)
+                        self.setMid(self.lastMerge, sys._getframe().f_lineno)
+                        self.isVisual = True
+                    elif relation in (Direction.Right,):
+                        # 逆序包含
+                        self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 逆序包含", relation)
+                        deal = (0,0,1)
+                        self.setLeft(self._mid, sys._getframe().f_lineno)
+                        self.setMid(segment, sys._getframe().f_lineno)
+                        self.isVisual = True
+                    else:
+                        raise TypeError(relation)
+                    
+                case -2, (0,1,0):# 下跌出现底, 进入缺口模式
                     if segment.direction is Direction.Up:
                         self.log("不需要处理 -2")
                         break
-                    # 下跌出现底
-                    # 进入缺口模式
-                    match (self._deal_left, self._deal_mid, self._deal_right):
-                        case (0,1,0):
-                            # 第二特征序列
-                            self.isVisual = True
-                            if self._left.direction != segment.direction:
-                                raise Exception()
-                            relation = doubleRelation(self._left.toPillar(), segment.toPillar())
-                            if relation in (Direction.Up, Direction.JumpUp, Direction.Right, Direction.Down, Direction.JumpDown):
-                                # 涨, 跌, 逆序包含
-                                self.log(sys._getframe().f_lineno, "第二特征序列 缺口模式", relation)
-                                deal = (0,0,1)
-                                self.setMid(segment, sys._getframe().f_lineno)
+                    # 第二特征序列
+                    self.isVisual = True
+                    if self._left.direction != segment.direction:
+                        raise Exception()
+                    relation = doubleRelation(self._left.toPillar(), segment.toPillar())
+                    if relation in (Direction.Up, Direction.JumpUp, Direction.Right, Direction.Down, Direction.JumpDown):
+                        # 涨, 跌, 逆序包含
+                        self.log(sys._getframe().f_lineno, "第二特征序列 缺口模式", relation)
+                        deal = (0,0,1)
+                        self.setMid(segment, sys._getframe().f_lineno)
 
-                            elif relation in (Direction.Left,):
-                                # 顺序包含
-                                self.log(sys._getframe().f_lineno, "第二特征序列 缺口模式 顺序包含", relation)
-                                deal = (0,1,0)
-                                self.lastMerge = mergeFeature(self._left, segment)
-                                self.setLeft(self.lastMerge, sys._getframe().f_lineno)
-                            else:
-                                raise TypeError(relation)
-                            self.isVisual = True
+                    elif relation in (Direction.Left,):
+                        # 顺序包含
+                        self.log(sys._getframe().f_lineno, "第二特征序列 缺口模式 顺序包含", relation)
+                        deal = (0,1,0)
+                        self.lastMerge = mergeFeature(self._left, segment)
+                        self.setLeft(self.lastMerge, sys._getframe().f_lineno)
+                    else:
+                        raise TypeError(relation)
+                    self.isVisual = True
 
-                        case (0,0,1):
-                            # 第三特征序列
-                            if self._mid.direction != segment.direction:
-                                raise Exception("应该:", str(segment.direction), "实际:", str(self._mid.direction))
+                case -2, (0,0,1):
+                    if segment.direction is Direction.Up:
+                        self.log("不需要处理 -2")
+                        break
+                    # 第三特征序列
+                    if self._mid.direction != segment.direction:
+                        raise Exception("应该:", str(segment.direction), "实际:", str(self._mid.direction))
 
-                            relation = doubleRelation(self._mid.toPillar(), segment.toPillar())
-                            if relation in (Direction.Up, Direction.JumpUp):
-                                # 涨
-                                self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 正常跳转", relation)
-                                self.__append_segment(self._right.low, sys._getframe().f_lineno)
-                                ADD += 1
-                                deal = (0,0,1)
-                                self.setLeft(self.segments[-3], sys._getframe().f_lineno)
-                                self.setMid(self.segments[-1], sys._getframe().f_lineno)
-                                state = 1
+                    relation = doubleRelation(self._mid.toPillar(), segment.toPillar())
+                    if relation in (Direction.Up, Direction.JumpUp):
+                        # 涨
+                        self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 正常跳转", relation)
+                        self.__append_segment(self._right.low, sys._getframe().f_lineno)
+                        ADD += 1
+                        deal = (0,0,1)
+                        self.setLeft(self.segments[-3], sys._getframe().f_lineno)
+                        self.setMid(self.segments[-1], sys._getframe().f_lineno)
+                        state = 1
 
-                            elif relation in (Direction.Down, Direction.JumpDown):
-                                # 跌
-                                self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 正常跳转", relation)
-                                self.__append_segment(self._right.low, sys._getframe().f_lineno)
-                                self.__append_segment(self._mid.high, sys._getframe().f_lineno)
-                                ADD += 2
-                                deal = (0,1,0)
-                                self.setLeft(self.segments[-2], sys._getframe().f_lineno)
-                                state = -1
+                    elif relation in (Direction.Down, Direction.JumpDown):
+                        # 跌
+                        self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 正常跳转", relation)
+                        self.__append_segment(self._right.low, sys._getframe().f_lineno)
+                        self.__append_segment(self._mid.high, sys._getframe().f_lineno)
+                        ADD += 2
+                        deal = (0,1,0)
+                        self.setLeft(self.segments[-2], sys._getframe().f_lineno)
+                        state = -1
 
-                            elif relation in (Direction.Left,):
-                                # 顺序包含
-                                self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 顺序包含", relation)
-                                deal = (0,0,1)
-                                self.lastMerge = mergeFeature(self._mid, segment)
-                                self.setMid(self.lastMerge, sys._getframe().f_lineno)
-                                self.isVisual = True
+                    elif relation in (Direction.Left,):
+                        # 顺序包含
+                        self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 顺序包含", relation)
+                        deal = (0,0,1)
+                        self.lastMerge = mergeFeature(self._mid, segment)
+                        self.setMid(self.lastMerge, sys._getframe().f_lineno)
+                        self.isVisual = True
 
-                            elif relation in (Direction.Right,):
-                                # 逆序包含
-                                self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 逆序包含", relation)
-                                deal = (0,0,1)
-                                self.setLeft(self._mid, sys._getframe().f_lineno)
-                                self.setMid(segment, sys._getframe().f_lineno)
-                                self.isVisual = True
-                            else:
-                                raise TypeError(relation)
+                    elif relation in (Direction.Right,):
+                        # 逆序包含
+                        self.log(sys._getframe().f_lineno, "第三特征序列 缺口模式 逆序包含", relation)
+                        deal = (0,0,1)
+                        self.setLeft(self._mid, sys._getframe().f_lineno)
+                        self.setMid(segment, sys._getframe().f_lineno)
+                        self.isVisual = True
+                    else:
+                        raise TypeError(relation)
+                case _:
+                    raise ChanException("未知状态", self.featureMachine.state, (self._deal_left, self._deal_mid, self._deal_right))
             break
 
         self.last = segment
@@ -3027,7 +3067,6 @@ class ZouShiHandler:
 
 class ChZhShCh:
     def __init__(self):
-        #super(BiHandler, self).__init__(0, zsh)
         self.cklines = [] # 缠论k线
         self.klines = []
 
@@ -3035,12 +3074,12 @@ class ChZhShCh:
         self.shapeHandler = FenXingHandler()
 
         self.biHandler = BiHandler(self.cklines)
-        self.bzsHandler = ZhongShuHandler(self.biHandler.LEVEL)
+        self.bzsHandler = ZhongShuHandler(level=self.biHandler.LEVEL)
         self.biHandler.zsh = self.bzsHandler
         #self.biHandler.debug = 1
 
         self.featureHandler = FeatureHandler(1)
-        self.zsHandler = ZhongShuHandler(self.featureHandler.LEVEL)
+        self.zsHandler = ZhongShuHandler(level=self.featureHandler.LEVEL)
         self.featureHandler.zsh = self.zsHandler
         #self.featureHandler = None
 
